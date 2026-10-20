@@ -1,0 +1,28 @@
+# CI: every device's tests in plain Node (no Max, no network), and dist/ must match a fresh build (a test checks it).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  device:
+    name: ${{ matrix.device }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [gross-warp]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Node tests
+        working-directory: ${{ matrix.device }}
+        run: node --version && node --test test/*.test.js

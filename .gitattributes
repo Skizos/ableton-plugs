@@ -1,0 +1,8 @@
+# Keep LF everywhere; device containers and zips are binary.
+* text=auto eol=lf
+*.amxd binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.wav binary
+*.aif binary
