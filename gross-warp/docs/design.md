@@ -97,6 +97,15 @@ jsui ──writes──► buffer~ ---gwenv  ◄──reads── gen~      gen~
   parameters and banks, info texts, layout, the zip (contents, CRCs) and `dist/` being current.
 - Lint: the gen~ rules above; the jsui uses ES5 only (also parsed with acorn `--ecma5` once).
 
+## First load in Live (2026-10-22)
+
+The first build loaded in Live and Max's console showed two errors, both fixed:
+- `symbol: No such object` (twice): the buffer names were handed on with `[symbol ---x]`, a Pure Data object that Max
+  doesn't have, so gen~ and the editor never got their buffers. Now `[t ---x]`; a test checks every box against
+  Ableton's list of Max objects, and another that the names reach gen~ and the editor at load.
+- "a project without a name is like a day without sunshine. fatal.": the patcher had no `project` section; it now
+  carries the same one as Ableton's devices (a test checks it and its `amxdtype`).
+
 ## Not verified here (first load in Live)
 
 1. gen~ compiles the codebox (syntax kept to constructs seen in real codeboxes; see rules above).

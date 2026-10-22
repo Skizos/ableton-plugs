@@ -97,8 +97,11 @@ class MaxSim {
                         out(i, [Math.trunc(num(msg[0]))]);
                     } else if (args[i] === "f") {
                         out(i, [num(msg[0])]);
-                    } else {
+                    } else if (args[i] === "l" || args[i] === "a" || args[i] === "s") {
                         out(i, msg);
+                    } else {
+                        // a constant: output as is
+                        out(i, [isNaN(Number(args[i])) ? args[i] : Number(args[i])]);
                     }
                 }
                 return;

@@ -20,8 +20,12 @@
 
 ## Rules learned the hard way
 - **.amxd** = chunks `[tag][u32 LE size][data]`: `ampf`=`aaaa` (audio) / `mmmm` (MIDI) / `iiii` (instrument),
-  `meta`=0, `ptch`=patcher JSON + NUL. Don't hand-write frozen (`mx@c`) devices; ship the unfrozen device with its
-  scripts and tell the user how to freeze.
+  `meta`=0, `ptch`=patcher JSON + NUL. The patcher needs a `project` section (as in Ableton's devices, `amxdtype` =
+  the type letters as a big-endian number), or Max stops with "a project without a name is like a day without
+  sunshine. fatal." (seen in Live 2026-10-22). Don't hand-write frozen (`mx@c`) devices; ship the unfrozen device with
+  its scripts and tell the user how to freeze.
+- **Only real Max objects:** every box is checked against `test/max-objects.json` (Ableton's list). Max has no
+  `[symbol]` (that's Pure Data — it gave "symbol: No such object" in Live); a constant word comes from `[t word]`.
 - **gen~ codebox:** `peek()` only as the whole right-hand side of an assignment on its own line (inline peek fails
   silently); no `break`/`continue`/`+=`/`++`/`else if`; loops stop through their condition; set every variable at top
   level before any block assigns it; read each History once at the top and write it once at the end; no variable named
@@ -32,7 +36,7 @@
   file. `Function.immediate` is gone since Max 6: js always runs at low priority, so keep timing-critical paths (MIDI
   triggers, clocks) in native objects.
 - **Names:** `---name` makes buffers/sends private to a device instance — substituted in object boxes, so feed the
-  names on with `[symbol ---x] → [prepend …]`. Use plain global names only to link devices on purpose.
+  names on with `[t ---x] → [prepend …]`. Use plain global names only to link devices on purpose.
 - **Parameters:** every `live.*` control gets a long name, a short name and Info View text (`annotation`). Data
   that isn't automatable goes in a jsui blob parameter (`parameter_type` 3, Stored Only) via `getvalueof`/`setvalueof`;
   call `notifyclients()` only on finished edits (mouse-up), never during drags or from playback, or Live's undo

@@ -49,7 +49,6 @@ function io(text) {
         change: [1, ["", "int", "int"]],
         loadbang: [1, ["bang"]],
         "buffer~": [1, ["float", "bang"]],
-        symbol: [2, [""]],
         "live.thisdevice": [1, ["bang", "int", "int"]],
         "live.path": [1, ["", "", ""]],
         "live.observer": [2, ["", ""]],
@@ -70,7 +69,8 @@ function io(text) {
         return fixed[cls];
     }
     if (cls === "t") {
-        return [1, args.map((a) => ({ b: "bang", i: "int", f: "float", l: "" })[a])];
+        // type letters, or a constant (e.g. [t ---gwenv] outputs that name)
+        return [1, args.map((a) => ({ b: "bang", i: "int", f: "float", l: "" })[a] || "")];
     }
     if (cls === "unpack") {
         return [1, args.map(() => "int")];
@@ -255,7 +255,34 @@ function liveComment(text, prect, patchXY) {
     };
 }
 
-function topPatcher(p, width, description, banks) {
+// Max treats a device as a project; without this section it stops with "a project without a name is like a day
+// without sunshine. fatal." Same fields as Ableton's own unfrozen devices (maxdevtools cpu-reporter); amxdtype is the
+// device type's four letters read as a big-endian number.
+function project(type) {
+    return {
+        version: 1,
+        creationdate: 3590052493,
+        modificationdate: 3590052493,
+        viewrect: [0.0, 0.0, 300.0, 500.0],
+        autoorganize: 1,
+        hideprojectwindow: 1,
+        showdependencies: 1,
+        autolocalize: 0,
+        contents: { patchers: {} },
+        layout: {},
+        searchpath: {},
+        detailsvisible: 0,
+        amxdtype: Buffer.from(type, "ascii").readUInt32BE(0),
+        readonly: 0,
+        devpathtype: 0,
+        devpath: ".",
+        sortmode: 0,
+        viewmode: 0,
+        includepackages: 0,
+    };
+}
+
+function topPatcher(p, width, description, banks, type) {
     const params = Object.assign({}, p.params, {
         parameterbanks: { 0: { index: 0, name: banks.name, parameters: banks.parameters } },
         inherited_shortname: 1,
@@ -303,6 +330,7 @@ function topPatcher(p, width, description, banks) {
             minimum_live_version: "",
             minimum_max_version: "",
             platform_compatibility: 0,
+            project: project(type),
             autosave: 0,
         },
     };
@@ -386,8 +414,9 @@ function buildPatcher(genCode) {
     connect(sizeEnv, 0, envBuf, 0);
     connect(sizePeak, 0, peakBuf, 0);
 
-    const symEnv = newobj("symbol ---gwenv", 330, 100, 100);
-    const symPeak = newobj("symbol ---gwpeaks", 450, 100, 110);
+    // a trigger with a constant argument outputs it; the object box gets the device-unique name (Max has no [symbol])
+    const symEnv = newobj("t ---gwenv", 330, 100, 100);
+    const symPeak = newobj("t ---gwpeaks", 450, 100, 110);
     connect(trig, 1, symEnv, 0);
     connect(trig, 1, symPeak, 0);
     const genEnv = newobj("prepend gwenv", 330, 200, 90);
@@ -632,6 +661,7 @@ function buildPatcher(genCode) {
             name: "Gross Warp",
             parameters: ["Pattern", "Smooth", "Depth", "Dry/Wet", "Switch", "Length", "Pitch Lock", "Grain"],
         },
+        "aaaa",
     );
 }
 
@@ -766,10 +796,13 @@ function buildMidiPatcher() {
     p.add(liveComment("Base = pattern 1 ... Base + 7 = 8", [4.0, 112.0, 192.0, 16.0], [600, 220]));
     p.add(liveComment("Set Gross Warp's MIDI to the same link", [4.0, 130.0, 192.0, 16.0], [600, 240]));
 
-    return topPatcher(p, MIDI_DEVICE_WIDTH, "Plays Gross Warp patterns from MIDI notes (hold or latch).", {
-        name: "Gross Warp MIDI",
-        parameters: ["Link", "Mode", "Base Note", "Thru", "-", "-", "-", "-"],
-    });
+    return topPatcher(
+        p,
+        MIDI_DEVICE_WIDTH,
+        "Plays Gross Warp patterns from MIDI notes (hold or latch).",
+        { name: "Gross Warp MIDI", parameters: ["Link", "Mode", "Base Note", "Thru", "-", "-", "-", "-"] },
+        "mmmm",
+    );
 }
 
 // ---------------------------------------------------------------------------------------------------------------
