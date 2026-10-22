@@ -469,3 +469,109 @@ test("MIDI triggers follow the Switch grid", () => {
     const out = m.rig.run(4000, () => [0, 0]);
     assert.equal(start + out.active.indexOf(3), 12000);
 });
+
+test("swing delays every second grid step of the envelopes, and only those", () => {
+    const rig = makeRig({ sr: SR, exposeLocals: true });
+    rig.gen.setParam("swunit", 0.25); // the editor's grid: 1/16
+    rig.gen.setParam("swing", 50);
+    const at = (quarters) => {
+        const r = makeRig({ sr: SR, exposeLocals: true, startBeat: quarters });
+        r.gen.setParam("swunit", 0.25);
+        r.gen.setParam("swing", 50);
+        r.gen.setParam("songbeats", quarters); // the song position Live reports
+        r.run(2, () => [0, 0]);
+        return r.gen.state.patPh * 4; // envelope position in quarters (1-bar pattern)
+    };
+    // the off-beat sixteenth (envelope position 0.25 q) is reached 50 % of a step late, at 0.375 q
+    assert.ok(Math.abs(at(0.375 + 1 / 6000) - 0.25) < 1e-3);
+    // the on-beat ones stay where they are
+    assert.ok(Math.abs(at(0.5 + 1 / 6000) - 0.5) < 1e-3);
+    assert.ok(Math.abs(at(1 + 1 / 6000) - 1) < 1e-3);
+    // the 1/16 Roll's steps on off-beats move later in real time
+    rig.gen.setParam("pattern", 2);
+    const out = rig.run(2 * BAR, timecode());
+    const six = BAR / 16;
+    // step 9 of the roll (an off-beat) starts half a sixteenth late: still live just before, a sixteenth late after
+    const s9 = BAR + 9 * six + six / 2;
+    assert.ok(Math.abs(out.L[s9 - 100] - (s9 - 100)) < 1e-3, `${out.L[s9 - 100]}`);
+    assert.ok(Math.abs(out.L[s9 + FADE + 10] - (s9 + FADE + 10 - six)) < 1e-3, `${out.L[s9 + FADE + 10]}`);
+});
+
+function holdRig(mode, lenSel) {
+    const rig = makeRig({ sr: SR });
+    rig.gen.setParam("holdmode", mode);
+    rig.gen.setParam("holdlen", lenSel);
+    return rig;
+}
+
+test("Hold Last loops what just played", () => {
+    const rig = holdRig(0, 2); // a beat = 6000 samples
+    const tc = timecode();
+    rig.run(BAR, tc);
+    rig.gen.setParam("hold", 1);
+    const out = rig.run(4 * 6000, tc);
+    const t0 = BAR;
+    for (const j of [400, 3000, 5500, 6400, 9000, 12400, 20000]) {
+        const want = t0 - 6000 + (j % 6000);
+        assert.ok(Math.abs(out.L[j] - want) < 1e-6, `+${j}: ${out.L[j]} vs ${want}`);
+    }
+    rig.gen.setParam("hold", 0);
+    const after = rig.run(2000, tc);
+    assert.ok(Math.abs(after.L[1500] - (t0 + 24000 + 1500)) < 1e-6, "released: live again");
+});
+
+test("Hold Next records the next length, then loops it", () => {
+    const rig = holdRig(1, 1); // half a beat = 3000 samples
+    const tc = timecode();
+    rig.run(BAR, tc);
+    rig.gen.setParam("hold", 1);
+    const out = rig.run(4 * 3000, tc);
+    const t0 = BAR;
+    assert.ok(Math.abs(out.L[1500] - (t0 + 1500)) < 1e-6, "while recording it plays on");
+    for (const j of [3000 + 400, 3000 + 2500, 6000 + 1000, 9000 + 2000]) {
+        const want = t0 + (j % 3000);
+        assert.ok(Math.abs(out.L[j] - want) < 1e-6, `+${j}: ${out.L[j]} vs ${want}`);
+    }
+});
+
+test("Hold does not click: engaging, the loop seam and letting go stay smooth", () => {
+    const rig = holdRig(0, 0); // 1/16 = 1500 samples, many seams
+    const w = (2 * Math.PI * 50) / SR;
+    const out = rig.run(3 * BAR, (i) => {
+        if (i === BAR + 777) {
+            rig.gen.setParam("hold", 1);
+        }
+        if (i === 2 * BAR + 333) {
+            rig.gen.setParam("hold", 0);
+        }
+        return [Math.sin(w * i), Math.sin(w * i)];
+    });
+    let m = 0;
+    for (let i = BAR; i < 3 * BAR; i++) {
+        m = Math.max(m, Math.abs(out.L[i] - out.L[i - 1]));
+    }
+    assert.ok(m < 0.1, `largest step ${m}`);
+});
+
+test("Hold lets go when the transport stops", () => {
+    const rig = holdRig(0, 2);
+    const tc = timecode();
+    rig.run(BAR, tc);
+    rig.gen.setParam("hold", 1);
+    rig.run(3000, tc);
+    const stopped = rig.run(BAR, tc, false);
+    assert.ok(Math.abs(stopped.L[BAR - 1] - (BAR + 3000 + BAR - 1)) < 1e-6, "pass-through again");
+});
+
+test("MIDI one-shot: the pattern plays one pattern length, then Pattern takes over", () => {
+    const m = midiRig();
+    m.rig.gen.setParam("quant", 4); // switch at pattern ends
+    m.rig.gen.setParam("pattern", 1);
+    m.rig.run(10000 - 20, () => [0, 0]);
+    m.rig.gen.setParam("trigon", 3 + 16 * 2);
+    const out = m.rig.run(3 * BAR, () => [0, 0]);
+    const start = 10000 - 20; // samples run before this block
+    assert.equal(out.active.indexOf(3) + start, BAR, "starts at the next pattern");
+    assert.equal(out.active.lastIndexOf(3) + start, 2 * BAR - 1, "plays one bar");
+    assert.equal(out.active[out.active.length - 1], 1);
+});

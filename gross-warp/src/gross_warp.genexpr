@@ -6,9 +6,11 @@
 // out3        pattern phase 0..1, or -1 while the transport is stopped
 // out4        the pattern now playing (0..7)
 //
-// Params set by the patcher: pattern, quant, patlen, smoothms, depth, wet, pitchlock, grainms; from the Live API:
-// songbeats (song position in beats, arrives a little late), signum, sigden (time signature); from Gross Warp MIDI:
-// trigon, trigoff (pattern + 8 * parity + 16 * mode, the parity alternating per event so repeats are seen), midien.
+// Params set by the patcher: pattern, quant, patlen, smoothms, depth, wet, pitchlock, grainms, swing, hold, holdlen,
+// holdmode; from the editor: swunit (its grid step, in quarter notes); from the Live API: songbeats (song position in
+// beats, arrives a little late), signum, sigden (time signature); from Gross Warp MIDI: trigon, trigoff
+// (pattern + 8 * parity + 16 * mode, the parity alternating per event so repeats are seen; mode 0 hold, 1 latch,
+// 2 one-shot), midien.
 //
 // Envelopes arrive in buffer~ gwenv (one channel, written by gw_ui.js):
 //   block b = pattern * 2 + env (env 0 = time, 1 = volume), base = b * 385;
@@ -19,6 +21,8 @@
 // Volume: gain = 1 - u * depth.
 // Pitch lock: two grains (sin^2 windows, half a grain apart) play at normal speed from where the time envelope is,
 // so time warps without the pitch change.
+// Swing: every second grid step of both envelopes starts later (the pattern phase is warped; switching stays straight).
+// Hold: loops the device's own wet output - Last: the last N that played; Next: records the next N, then loops.
 //
 // House rules for this file (gen~ is unforgiving and silent about some of them):
 //   - peek() only as the whole right-hand side of an assignment, on its own line;
@@ -36,6 +40,8 @@ hermite(ym, y0, y1, y2, fr) {
 Buffer gwenv("gwenv");
 Buffer gwpeaks("gwpeaks");
 Data gwring(2097152, 2);
+Data gwout(524288, 2);
+Data gwhold(524288, 2);
 
 Param pattern(0);
 Param quant(4);
@@ -51,6 +57,11 @@ Param sigden(4);
 Param trigon(-1);
 Param trigoff(-1);
 Param midien(0);
+Param swing(0);
+Param swunit(0.25);
+Param hold(0);
+Param holdlen(2);
+Param holdmode(0);
 
 History hWpos(0);
 History hPrevPh(0);
@@ -82,6 +93,13 @@ History hGain(1);
 History hBin(0);
 History hPkIn(0);
 History hPkOut(0);
+History hOsStart(-1);
+History hHoldT(0);
+History hHoldL(64);
+History hHoldMix(0);
+History hHoldOp(0);
+History hHoldPrev(0);
+History hOutPos(0);
 
 ringLen = 2097152;
 blockLen = 385;
@@ -117,6 +135,13 @@ gainNow = hGain;
 binNow = hBin;
 pkIn = hPkIn;
 pkOut = hPkOut;
+osStart = hOsStart;
+holdT = hHoldT;
+holdL = hHoldL;
+holdMix = hHoldMix;
+holdOp = hHoldOp;
+holdPrev = hHoldPrev;
+outPos = hOutPos;
 
 // ---- transport: is the beat phase moving, how fast, and which beat of the song this is ----
 beatPh = in3;
@@ -172,7 +197,23 @@ if (lenSel == 4) {
     patQ = qpb * 4;
 }
 songPos = beatCnt + beatPh;
-patPos = songPos / patQ;
+// swing: within each pair of grid steps the first is stretched and the second squeezed, so the off-beat comes later
+swAmt = clamp(swing, 0, 75) * 0.01;
+swU = max(swunit, 0.015625);
+swPair = 0;
+swR = 0;
+swE = 0;
+envPos = songPos;
+if (swAmt > 0) {
+    swPair = floor(songPos / (2 * swU));
+    swR = (songPos - swPair * 2 * swU) / swU;
+    swE = swR / (1 + swAmt);
+    if (swR >= 1 + swAmt) {
+        swE = 1 + (swR - 1 - swAmt) / (1 - swAmt);
+    }
+    envPos = swPair * 2 * swU + swE * swU;
+}
+patPos = envPos / patQ;
 patPh = patPos - floor(patPos);
 beatSamps = 0;
 if (incEst > 0) {
@@ -180,7 +221,8 @@ if (incEst > 0) {
 }
 patSamps = beatSamps * patQ;
 
-// ---- MIDI triggers: hold (0) plays a pattern while its note is down, latch (1) toggles it ----
+// ---- MIDI triggers: hold (0) plays a pattern while its note is down, latch (1) toggles it, one-shot (2) plays it
+// for one pattern length ----
 tOn = 0;
 tN = 0;
 tNew = 0;
@@ -190,8 +232,9 @@ if (trigon != onPrev) {
     if (trigon >= 0) {
         tOn = floor(trigon + 0.5);
         tN = tOn % 8;
-        trigMode = floor(tOn / 16) % 2;
+        trigMode = floor(tOn / 16) % 4;
         tNew = tN;
+        osStart = -1;
         if (trigMode == 1 && trigCur == tN) {
             tNew = -1;
         }
@@ -214,6 +257,9 @@ if (midien < 0.5) {
 }
 
 // ---- pattern switching on the Switch grid (Instant, 1/16, Beat, Bar, Pattern) ----
+if (trigMode == 2 && trigCur >= 0 && osStart >= 0 && songPos - osStart >= patQ) {
+    trigCur = -1;
+}
 reqPat = clamp(floor(pattern + 0.5), 0, 7);
 if (trigCur >= 0) {
     reqPat = trigCur;
@@ -248,6 +294,13 @@ if (playing > 0 && qMode > 0 && crossed > 0) {
 }
 if (playing > 0 && qMode > 0 && reqPat != reqPrev && sinceCross < graceS) {
     actPat = reqPat;
+}
+// one-shot: one pattern length from when the triggered pattern started playing (set below), then back to Pattern
+if (trigCur >= 0 && osStart < 0 && actPat == trigCur && playing > 0) {
+    osStart = songPos;
+}
+if (trigCur < 0) {
+    osStart = -1;
 }
 
 // ---- time envelope of the active pattern ----
@@ -617,10 +670,80 @@ xfNext = min(xfNow + 1 / smS, 1);
 gCoef = 1 - exp(-3 / smS);
 gainNow = gainNow + (gainTgt - gainNow) * gCoef;
 
+// ---- hold: loop what just played (Last) or the next N (Next), from the device's own wet output ----
+wetOutL = wetL * gainNow;
+wetOutR = wetR * gainNow;
+holdReq = 0;
+if (hold > 0.5 && playing > 0) {
+    holdReq = 1;
+}
+hlSel = clamp(floor(holdlen + 0.5), 0, 4);
+hlQ = 1;
+if (hlSel == 0) {
+    hlQ = 0.25;
+}
+if (hlSel == 1) {
+    hlQ = 0.5;
+}
+if (hlSel == 3) {
+    hlQ = 2;
+}
+if (hlSel == 4) {
+    hlQ = qpb;
+}
+hMode = clamp(floor(holdmode + 0.5), 0, 1);
+if (holdReq > 0 && holdPrev == 0) {
+    holdT = 0;
+    holdL = clamp(floor(hlQ * beatSamps + 0.5), 64, 524280);
+    holdOp = outPos;
+}
+hk = holdT % holdL;
+hPass = floor(holdT / holdL);
+hsL = 0;
+hsR = 0;
+srcIdx = 0;
+holdTgt = 0;
+seamG = 0;
+fadeS = max(smS, 32);
+if (holdReq > 0 || holdMix > 0) {
+    if (hMode == 0 && hPass < 1) {
+        // first pass of Last: play the last N from the output ring and copy it into the loop
+        srcIdx = (holdOp - holdL + hk + 524288) % 524288;
+        hsL = peek(gwout, srcIdx, 0);
+        hsR = peek(gwout, srcIdx, 1);
+        poke(gwhold, hsL, hk, 0);
+        poke(gwhold, hsR, hk, 1);
+    }
+    if (hMode == 1 && hPass < 1) {
+        // first pass of Next: record what plays now
+        poke(gwhold, wetOutL, hk, 0);
+        poke(gwhold, wetOutR, hk, 1);
+    }
+    if (hPass >= 1) {
+        hsL = peek(gwhold, hk, 0);
+        hsR = peek(gwhold, hk, 1);
+    }
+    holdT = holdT + 1;
+}
+if (holdReq > 0 && (hMode == 0 || hPass >= 1)) {
+    holdTgt = 1;
+}
+holdMix = clamp(holdMix + clamp(holdTgt - holdMix, -1 / smS, 1 / smS), 0, 1);
+if (holdReq == 0 && holdMix <= 0) {
+    holdT = 0;
+}
+// a short raised-cosine dip at the loop seam, so the jump back does not click
+seamG = clamp(min(hk, holdL - 1 - hk) / fadeS, 0, 1);
+seamG = 0.5 - 0.5 * cos(3.141592653589793 * seamG);
+wetOutL = wetOutL * (1 - holdMix) + hsL * seamG * holdMix;
+wetOutR = wetOutR * (1 - holdMix) + hsR * seamG * holdMix;
+poke(gwout, wetOutL, outPos, 0);
+poke(gwout, wetOutR, outPos, 1);
+
 // ---- mix ----
 wetAmt = clamp(wet, 0, 100) * 0.01;
-outL = in1 * (1 - wetAmt) + wetL * gainNow * wetAmt;
-outR = in2 * (1 - wetAmt) + wetR * gainNow * wetAmt;
+outL = in1 * (1 - wetAmt) + wetOutL * wetAmt;
+outR = in2 * (1 - wetAmt) + wetOutR * wetAmt;
 out1 = outL;
 out2 = outR;
 
@@ -673,3 +796,10 @@ hGain = gainNow;
 hBin = binNew;
 hPkIn = pkIn;
 hPkOut = pkOut;
+hOsStart = osStart;
+hHoldT = holdT;
+hHoldL = holdL;
+hHoldMix = holdMix;
+hHoldOp = holdOp;
+hHoldPrev = holdReq;
+hOutPos = (outPos + 1) % 524288;

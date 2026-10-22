@@ -115,11 +115,12 @@ function makeMaxBuffers(chanBase) {
 }
 
 function loadUi(options) {
-    const opts = Object.assign({ chanBase: 1, size: [404, 140] }, options);
+    const opts = Object.assign({ chanBase: 1, size: [380, 157] }, options);
     const buffers = opts.buffers || makeMaxBuffers(opts.chanBase);
     const globals = opts.globals || new Map();
     const mg = recorder(opts.size);
     const notified = { count: 0 };
+    const outs = []; // what the script sent out of its outlet: ["pattern", 3], ["swunit", 0.25], ...
     const ctx = {
         mgraphics: mg,
         Buffer: buffers.MaxBuffer,
@@ -134,12 +135,18 @@ function loadUi(options) {
             }
             return globals.get(name);
         },
+        outlet(n, ...args) {
+            outs.push(args);
+        },
         box: { rect: [0, 0, opts.size[0], opts.size[1]] },
         jsarguments: [],
     };
+    if (opts.getcolor) {
+        ctx.max = { getcolor: opts.getcolor }; // the v8 engine's max.getcolor (missing in the classic js engine)
+    }
     vm.createContext(ctx);
     vm.runInContext(UI_SRC, ctx, { filename: "gw_ui.js" });
-    return { ctx, mg, buffers, notified, globals };
+    return { ctx, mg, buffers, notified, globals, outs };
 }
 
 // The device: buffers sized first, then their names handed to gen~ and the editor (the patcher's load order).

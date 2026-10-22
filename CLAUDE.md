@@ -30,8 +30,8 @@
   silently); no `break`/`continue`/`+=`/`++`/`else if`; loops stop through their condition; set every variable at top
   level before any block assigns it; read each History once at the top and write it once at the end; no variable named
   like a gen operator or constant (`wave`, `rate`, `delta`, `e`, `pi`, `mix`, `pass`, …). Passing Buffer/Data into
-  functions is unverified, so buffer reads are inlined. Gross Warp retargets a Buffer by sending gen~
-  `<Buffer name> <buffer~ name>` — also unverified until a device is loaded in Live; update this line when it is.
+  functions is unverified, so buffer reads are inlined. A Buffer is retargeted by sending gen~
+  `<Buffer name> <buffer~ name>` (works: Gross Warp runs in Live, owner's report 2026-10-22).
 - **js / jsui:** ES5 only (Max's engine predates ES6). Touch Max globals only inside functions so tests can load the
   file. `Function.immediate` is gone since Max 6: js always runs at low priority, so keep timing-critical paths (MIDI
   triggers, clocks) in native objects.
@@ -41,6 +41,12 @@
   that isn't automatable goes in a jsui blob parameter (`parameter_type` 3, Stored Only) via `getvalueof`/`setvalueof`;
   call `notifyclients()` only on finished edits (mouse-up), never during drags or from playback, or Live's undo
   history floods.
+- **Custom panels (jsui):** controls the panel draws that should be Live parameters are hidden `live.*` objects (no
+  presentation): jsui `outlet(0, name, value)` → `[route name …]` → the parameter → `[prepend name]` → DSP and back to
+  the jsui, which shows only what comes back. Theme: `[live.colors]` (`everything` at load and on its right-outlet
+  bang) → jsui `anything()` as `<id> r g b a`; color ids seen in Ableton's devices: `lcd_bg`, `control_bg`,
+  `control_selection`, `display_handle_two`, `display_scale_text`, `lcd_control_fg_zombie` — keep a fallback for any
+  other. `live.thisdevice` middle outlet = device on/off (dim the panel). `live.text` without `mode` is a toggle.
 - **Timing:** `[phasor~ 4n @lock 1]` gives a beat phase locked to Live's transport (it stops with the transport);
   bars and song position come from the Live API (`current_song_time`, `signature_numerator/denominator`) via
   `live.thisdevice → [path live_set( → live.path → [t b l] → live.observer` (id into the right inlet first).

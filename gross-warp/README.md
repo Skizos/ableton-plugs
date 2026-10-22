@@ -1,12 +1,13 @@
 # Gross Warp — a Gross Beat-style Max for Live effect
 
 Half time, tape stops, stutters, rolls, scratches, reverses and gates, drawn as two envelopes and locked to your song.
-Eight patterns, 1 beat to 4 bars, any time signature, optional pitch lock, and patterns you can play from MIDI notes.
+Eight patterns, 1 beat to 4 bars, any time signature, Hold, Swing, Dice and Evolve, optional pitch lock, and patterns
+you can play from MIDI notes. The panel follows the layout of the original Gross Warp picture and Live's color theme.
 
 ![Gross Warp (approximate render, see below)](docs/preview.svg)
 
-*Rendered by `tools/preview.js` from the real editor script and the simulated DSP, with Live's own dials and menus
-mocked; Live draws those slightly differently.*
+*Rendered by `tools/preview.js` from the real editor script and the simulated DSP, with Live's own dials and the
+Pitch Lock button mocked; Live draws those, and the Ableton Sans font, slightly differently.*
 
 ## Download
 
@@ -45,6 +46,7 @@ under a new name.
 3. Notes from **Base** (default C1) up play patterns: C1 = 1, C♯1 = 2, … G1 = 8.
    - **Hold**: the pattern plays while its note is down, then the *Pattern* control takes over again.
    - **Latch**: a note switches to its pattern; the same note again releases it.
+   - **One-shot**: a note plays its pattern once (one pattern length), then the *Pattern* control takes over again.
 4. Draw the notes in a MIDI clip (or arm the track and play them). Triggers follow *Switch*, so notes on the beat
    switch on the beat. Several Gross Warps on one link all follow the same notes.
 
@@ -58,30 +60,41 @@ silent. Steps in the time envelope cross-fade over *Smooth* ms, so they don't cl
 played as short overlapping grains at normal speed from wherever the time envelope points, so slowing, stopping or
 reversing keeps the original pitch.
 
-## Controls
+## The panel
+
+```
+┌──────────────────────── display: waveform · envelopes · playhead ──────────────── Normal ┐ [Pitch Lock]
+│                                                                                          │   Smooth
+└──────────────────────────────────────────────────────────────────────────────────────────┘   Depth
+[Time][Volume] [◂ 1/16 Roll ▾ ▸] [point][draw][dice][flip][copy][paste]                         Dry/Wet
+[1][2][3][4][5][6][7][8] [Switch Beat] [◂ Hold 1/4 ▸] [Swing 0] [undo][grid][settings]
+```
 
 | Control | What it does |
 |---|---|
-| **1–8** (Pattern) | The pattern to play and edit. Automate it, or map it to Push / a controller. |
-| **Switch** | When a new pattern takes over: *Instant*, next *1/16*, next *Beat*, next *Bar*, or the end of the *Pattern*. A change that lands up to 40 ms after a grid line (a note on the beat) still takes that line. |
-| **Length** | 1 beat, 2 beats, 1 bar, 2 bars or 4 bars, in the song's time signature. |
+| **Time / Volume** | Which envelope you edit. The other one is drawn faintly; its preset name is top right in the display. |
+| **◂ preset ▾ ▸** | Step through the presets of the edited envelope, or click the name for the browser: categories on the left, presets on the right, and **Combos** that set both envelopes at once. |
+| **Point / Draw** | Editing tool (mouse table below). |
+| **Dice** | Roll a new musical pattern (both envelopes) on the grid. **Shift**-click: *mutate*, re-roll just one envelope. |
+| **Flip** | Turn the edited envelope upside down (a gate inverts; a time shape mirrors). |
+| **Copy / Paste** | The edited envelope; the clipboard is shared by every Gross Warp in the set. |
+| **1–8** | Play and edit that pattern (the *Pattern* parameter: automate it, or map it to Push). A line under a pad marks the pattern that is playing. **Alt**-click a pad: copy the shown pattern (both envelopes) into it. |
+| **Switch** | When a new pattern takes over: *Now*, next *1/16*, next *Beat*, next *Bar*, or the end of the *Pattern*. A change up to 40 ms after a grid line (a note on the beat) still takes that line. |
+| **◂ Hold ▸** | Click *Hold* to loop a short slice of the output; ◂ ▸ set its length (1/16, 1/8, 1/4, 1/2, 1 bar). *Last* (settings) repeats what just played, *Next* records what comes and repeats that. It fades in and out over *Smooth*; automate it for stutter fills. |
+| **Swing** | Drag up/down (0–75 %), double-click for 0. Pushes every second grid step of **both envelopes** later — the sound swings, not just the grid. The step is the editor's grid (1/16 when the grid is off). |
+| **Undo** | Undo an edit; **Shift**-click redoes. |
+| **Grid** (#) | *Snap*: Off, 1/4, 1/8, 1/16, 1/32, 1/8T, 1/16T. *Length*: 1 beat, 2 beats, 1 bar, 2 bars or 4 bars, in the song's time signature. |
+| **Settings** (gear) | *Hold* Last / Next · *Grain* size for Pitch Lock (10–250 ms: short for drums, long for pads) · *MIDI* Off / A–D: follow a *Gross Warp MIDI* on that link · *Evolve* Off / Beat / Bar / 2 Bars / 4 Bars: mutate the playing pattern that often. |
+| **Pitch Lock** | Lit: time effects (half time, stops, reverses) keep the original pitch (granular). Off: they change pitch like tape. |
 | **Smooth** | Cross-fade time at steps in the time envelope, and slew of the volume envelope (0.1–50 ms). |
 | **Depth** | Scales both envelopes (0 % = no effect). |
 | **Dry/Wet** | Mix with the input. At *Normal* the wet signal is identical to the dry one, so mixing never phases. |
-| **Pitch** Off / Lock | Lock: time effects keep the original pitch (granular). |
-| **Grain** | Grain size for Pitch Lock (10–250 ms): short for drums, long for pads and vocals. |
-| **MIDI** Off / A–D | Follow a *Gross Warp MIDI* device on the same link. |
-| **Time / Volume** | Which envelope you edit (the other is shown faintly). |
-| **< preset >** | Load a preset shape into the edited envelope; click the name for the full list. |
-| **Point / Draw** | Editing tool (below). |
-| **Grid** | Snap: Off, 1/4, 1/8, 1/16, 1/32, 1/8T, 1/16T. Click the name to cycle. |
-| **Swing** | Moves every second grid line later (0–75 %). Click the value to reset. |
-| **Copy / Paste** | The edited envelope; the clipboard is shared by every Gross Warp in the set. |
-| **Clear / Undo / Redo** | Reset the edited envelope to neutral; undo/redo editor changes. |
 
-Every control also explains itself in Live's Info View.
+Pattern, Switch, Length, Hold, Hold Length, Hold Mode, Swing, Grain and MIDI Link are Live parameters even though the
+panel draws them: they can be automated, mapped and are on Push (two banks). Every control explains itself in Live's
+Info View. Evolve's changes are not undo steps (they come from playback); they are saved with the set at your next edit.
 
-### Mouse
+### Mouse in the display
 
 | Point tool | |
 |---|---|
@@ -96,18 +109,33 @@ Every control also explains itself in Live's Info View.
 | Click / drag | Paint flat steps, one grid cell at a time (1/32 notes with the grid off). |
 | **Alt**-drag | Erase to neutral. |
 
+In the time view, two faint guide lines from the top left (as in Gross Beat) show where a slope **stops** the sound
+(45°) and where it plays it **backwards** at normal speed (twice as steep); steeper than *stop* is reverse.
+
 ### Presets
 
-**Time:** Normal, Half Time, Half Time 1/2, Tape Stop, Tape Stop Bar, Tape Start, Reverse 1/2, Reverse Beats,
-1/16 Roll, Stutter 1/4, Roll Build, Scratch, Slow > Fast, Delay 1/8.
-**Volume:** Full, Gate 1/8, Gate 1/16, Trance Gate, Pump 1/4, Fade In, Fade Out, Off-Beat, Chop Last Beat, Swell 1/2.
+76 presets and 9 combos, in categories (the browser). Steps are fractions of the pattern (made for 1-bar patterns in
+4/4), so they scale with *Length*.
 
-The eight patterns start as: 1 Normal · 2 Half Time · 3 1/16 Roll · 4 Tape Stop · 5 Reverse 1/2 · 6 Gate 1/16 ·
-7 Stutter 1/4 + Trance Gate · 8 Scratch + Pump 1/4. Preset steps are fractions of the pattern (made for 1-bar
-patterns in 4/4), so they scale with *Length*.
+**Time** — *Stutter*: 1/4, 1/8 End, Beat 2, Beats, 1/32 End · *Half*: Half Time, Half Time 1/2, Half Beats, Half Last
+Beat, Quarter Speed · *Stop*: Tape Stop, Tape Stop Bar, Stop Last Beat, Stop Beats, Brake · *Reverse*: 1/2, Beats, Last
+Beat, 1/8s · *Scratch*: Scratch, Fast, Last Beat, Baby Scratch · *Chop*: Back, Swap, Repeat · *Glitch*: Glitch, Reverse,
+Stops · *Build*: 1/16 Roll, Roll Build, Build 1/8 > 1/32 · *Tape*: Tape Start, Slow > Fast, Wobble, Start Each Beat ·
+*Pitch*: Octave Up 1/8, Octave Up Beats, Octave Down Beat, Pitch Arp · *Delay*: 1/8, 1/16, Beat, Echo Last Beat.
+
+**Volume** — *Gate*: 1/8, 1/16, 3/16, 1/32 End · *Pump*: 1/4, 1/8, Soft, Half · *Trance*: Trance Gate, 2, 3 ·
+*Stutter*: 1/16, End · *Rhythm*: Off-Beat, Euclid 5/16, Euclid 7/16, Clave · *Triplet*: Gate, Shuffle, 1/16 · *Fade*:
+In, Out, Swell 1/2, Fade Last Beat · *Cut*: Chop Last Beat, Cut Beat 4, Cut 2 & 4 · *Shape*: Saw 1/4, Ramp Up 1/4,
+Triangle 1/2.
+
+**Combos** — Roll + Gate, Stop + Fade, Half + Pump, Stutter Trance, Scratch Pump, Reverse Swell, Glitch Chop,
+Build Up, Wobble Triplets.
+
+Each envelope also has *Normal* (no effect). The eight patterns start as: 1 Normal · 2 Half Time · 3 1/16 Roll ·
+4 Tape Stop · 5 Reverse 1/2 · 6 Gate 1/16 · 7 Stutter 1/4 + Trance Gate · 8 Scratch + Pump 1/4.
 
 Everything you draw is saved with the Live set. Save a Live device preset (the floppy icon) to keep a set of eight
-patterns for other projects.
+patterns for other projects. Sets saved with the first version load as before.
 
 ## Inside
 
@@ -117,6 +145,8 @@ Design notes, test list and what only a real load in Live can confirm: [docs/des
 plugin~ ─► gen~ (src/gross_warp.genexpr) ─► plugout~
 phasor~ 4n @lock 1 (Live's beat) ─► gen~ ◄─ live.observer: song position, time signature (Live API)
 editor (jsui, src/gw_ui.js) ─► buffer~ ---gwenv (envelope points) ─► gen~ ─► buffer~ ---gwpeaks ─► editor
+editor ─► route ─► hidden live.* parameters (Pattern, Switch, Hold, Swing, …) ─► gen~ and back to the editor
+live.colors (Live's theme) ─► editor ◄─ live.thisdevice (device on/off)
 Gross Warp MIDI: midiin ─► midiparse ─► note logic ─► send grosswarp_A..D ─► receive ─► switch (MIDI) ─► gen~
 ```
 
@@ -131,12 +161,20 @@ Gross Warp MIDI: midiin ─► midiparse ─► note logic ─► send grosswarp
 - **Pitch Lock:** two grains with sin² windows half a grain apart (they sum to 1). Each grain starts where the time
   envelope points and plays at normal speed — backwards where the envelope reverses. On a jump both grains restart in
   step with the new position, under the same cross-fade.
+- **Hold:** gen~ keeps the last ~11 s of its own output in a ring. *Last* copies the last N into a loop buffer while
+  playing it; *Next* records the next N and then loops it. The loop seam gets a short raised-cosine fade, and the hold
+  fades in and out over *Smooth*, so it never clicks.
+- **Swing:** gen~ warps the song position before the envelopes read it: in each pair of grid steps the first is
+  stretched by the swing amount and the second squeezed, so both envelopes' off-steps land later; switching stays on
+  the straight grid.
 - **MIDI:** Gross Warp MIDI is built from native Max objects only (a `js` object would delay notes to the low-priority
   thread). Each note becomes `trigon`/`trigoff` with *pattern + 8 × parity + 16 × mode*; the parity alternates so a
-  repeated note is still seen; gen~ applies Hold/Latch.
+  repeated note is still seen; gen~ applies Hold/Latch/One-shot.
 - **Editor:** 8 × 2 envelopes of up to 128 points (x, level, curve), mirrored into the buffer on every change; saved as
   a hidden "blob" parameter in the Live set. Live is told once per edit (mouse-up), so its undo history gets one step
-  per edit. `---` buffer names are unique per device, so several Gross Warps never share envelopes.
+  per edit. `---` buffer names are unique per device, so several Gross Warps never share envelopes. Colors come from
+  `[live.colors]` (all of Live's theme colors at load and on every theme change), with a built-in dark palette for any
+  color Live doesn't send; the panel dims while the device is off.
 
 ## Development
 
@@ -144,7 +182,7 @@ Plain Node (20+), no dependencies, no Max needed:
 
 ```
 cd gross-warp
-npm test                # 74 tests: DSP, editor, devices, MIDI chain, lint (~2 min)
+npm test                # 101 tests: DSP, editor, devices, MIDI chain, lint (~3 min)
 npm run build           # rebuild dist/ (both devices, the script, the zip) after changing src/
 node tools/preview.js   # re-render docs/preview.svg
 ```
@@ -162,8 +200,9 @@ node tools/preview.js   # re-render docs/preview.svg
 
 ## If something is off on first load
 
-These devices were built and tested headless; they have not been opened in Max or Live yet. Open Max's console
-(wrench icon in the device title bar → *Window → Max Console*) and look for red lines:
+The first version ran in Live (owner's report, 2026-10-22). This redesigned panel was built and tested headless and has
+not been opened in Live yet. Open Max's console (wrench icon in the device title bar → *Window → Max Console*) and look
+for red lines:
 
 | Symptom | Likely cause and fix |
 |---|---|
@@ -175,6 +214,8 @@ These devices were built and tested headless; they have not been opened in Max o
 | Drawings aren't there after reopening the set | The jsui blob parameter didn't store. Device presets still keep them; please report it. |
 | MIDI notes do nothing | Gross Warp's *MIDI* must be set to the same letter as Gross Warp MIDI's *Link*, and the notes must be in Base…Base+7. |
 | Nothing happens while Live is stopped | By design: it passes audio through until the transport runs. |
+| The panel's colors don't follow a Live theme | `[live.colors]` didn't send what the editor expects; it then uses its own dark palette. Please send me a theme name and a screenshot. |
+| Clicking a pad, Hold or Swing changes nothing | The panel's message didn't reach its hidden parameter: send me the console lines. |
 
 ## Limits
 

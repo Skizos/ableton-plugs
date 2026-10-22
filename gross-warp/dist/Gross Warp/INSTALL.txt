@@ -39,17 +39,23 @@ make one self-contained file for sharing, click the wrench in the device's title
 
 Play
 ----
-- Pattern 1-8 picks the pattern (automate it in a clip or the arrangement).
+- Pads 1-8 pick the pattern (it is the Pattern parameter: automate it). Alt-click
+  (Option-click on Mac) a pad to copy the shown pattern into it.
 - Time / Volume picks the envelope you draw. Blue = time: top is normal, lower plays
   later; a fall at 45 degrees stops, steeper plays backwards, steps repeat a slice.
   Orange = volume.
-- < preset > loads shapes (1/16 Roll, Tape Stop, Reverse, Gates, Pump...).
-- Click to add points, drag them, Alt-click (Option-click on Mac) or double-click to
-  delete, drag the small circles to bend a line. Shift = no snapping. Draw paints steps.
-- Switch: when a new pattern starts (Instant, 1/16, Beat, Bar, end of Pattern).
-- Length: 1 beat to 4 bars. Any time signature.
-- Pitch: Lock keeps the pitch while the time envelope slows, stops or reverses the
-  sound (Grain sets the grain size: short for drums, long for pads).
+- < preset > steps through presets; click the name for the browser (categories and
+  Combos that set both envelopes).
+- Click to add points, drag them, Alt-click or double-click to delete, drag the small
+  circles to bend a line. Shift = no snapping. The bars icon paints steps.
+- Dice rolls a new pattern (Shift-click: change one envelope). Flip turns the envelope
+  upside down. Copy / Paste work between Gross Warps.
+- Switch: when a new pattern starts (Now, 1/16, Beat, Bar, end of Pattern).
+- Hold loops a short slice (< > set 1/16 to 1 bar). Swing: drag up/down.
+- # (grid): snap and pattern Length (1 beat to 4 bars, any time signature).
+- Gear: Hold Last/Next, Grain size, MIDI link, Evolve (changes the pattern as it plays).
+- Pitch Lock keeps the pitch while the time envelope slows, stops or reverses the
+  sound.
 
 
 Trigger patterns from MIDI (optional)
@@ -59,6 +65,7 @@ Trigger patterns from MIDI (optional)
 3. Notes from Base (C1) up: C1 = pattern 1, C#1 = 2, ... G1 = 8.
    Mode Hold: the pattern plays while the note is held, then Pattern takes over again.
    Mode Latch: a note switches to its pattern; the same note again releases it.
+   Mode One-shot: a note plays its pattern once, then Pattern takes over again.
 4. Draw the notes in a MIDI clip, or arm the track and play them. They follow Switch.
 Several Gross Warps on the same link all follow the same notes.
 

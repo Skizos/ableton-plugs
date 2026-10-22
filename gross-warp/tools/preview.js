@@ -10,9 +10,11 @@
 const fs = require("fs");
 const path = require("path");
 const { makeRig } = require("../test/helpers");
+const B = require("./build");
 
-const DEVICE_W = 540;
+const DEVICE_W = B.DEVICE_WIDTH;
 const DEVICE_H = 169;
+const [UI_X, UI_Y] = B.UI_RECT;
 
 function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -66,6 +68,16 @@ function callsToSvg(calls, ox, oy) {
                     `a${r} ${r} 0 0 1 ${r} ${-r} Z `;
                 break;
             }
+            case "arc": {
+                // cairo: a line from the current point (if any) to the start, then the arc, clockwise
+                const [cx, cy, r, a0, a1] = a;
+                const start = [cx + r * Math.cos(a0), cy + r * Math.sin(a0)];
+                const end = [cx + r * Math.cos(a1), cy + r * Math.sin(a1)];
+                d += `${d ? "L" : "M"}${P(start[0], start[1])} `;
+                d += `A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${P(end[0], end[1])} `;
+                cur = end;
+                break;
+            }
             case "ellipse": {
                 const [x, y, w, h] = a;
                 d += `M${P(x, y + h / 2)} a${w / 2} ${h / 2} 0 1 0 ${w} 0 a${w / 2} ${h / 2} 0 1 0 ${-w} 0 Z `;
@@ -115,43 +127,17 @@ function dial(x, y, label, value, frac) {
     ].join("\n");
 }
 
-function liveControls(selected) {
-    const parts = [];
-    for (let i = 0; i < 8; i++) {
-        const x = 4 + i * 22;
-        const on = i === selected;
-        parts.push(
-            `<rect x="${x}" y="150" width="21" height="16" fill="${on ? "#73c7ff" : "#3b3b3b"}"/>`,
-            `<text x="${x + 10.5}" y="161.5" font-size="9.5" text-anchor="middle" fill="${on ? "#111" : "#ccc"}">${i + 1}</text>`,
-        );
-    }
-    const menu = (x, label, value) =>
-        `<text x="${x - 40}" y="161.5" font-size="9.5" fill="#bbb">${label}</text>` +
-        `<rect x="${x}" y="150" width="66" height="15" fill="#3b3b3b"/>` +
-        `<text x="${x + 5}" y="161" font-size="9.5" fill="#ddd">${value}</text>` +
-        `<path d="M${x + 57} 156 l3 4 l3 -4 Z" fill="#aaa"/>`;
-    parts.push(menu(226, "Switch", "Pattern"), menu(340, "Length", "1 Bar"));
-    parts.push(dial(414, 4, "Smooth", "4.00 ms", 0.08), dial(414, 58, "Depth", "100 %", 1));
-    parts.push(dial(414, 112, "Dry/Wet", "100 %", 1));
-    // the second column: Pitch Lock, Grain, MIDI link
-    const label = (x, y, t) => `<text x="${x}" y="${y}" font-size="9.5" fill="#bbb">${t}</text>`;
-    parts.push(label(476, 13, "Pitch"));
-    ["Off", "Lock"].forEach((t, i) => {
-        const x = 476 + i * 29;
-        const on = i === 0;
-        parts.push(
-            `<rect x="${x}" y="18" width="28" height="15" fill="${on ? "#73c7ff" : "#3b3b3b"}"/>`,
-            `<text x="${x + 14}" y="29" font-size="9" text-anchor="middle" fill="${on ? "#111" : "#ccc"}">${t}</text>`,
-        );
-    });
-    parts.push(dial(478, 40, "Grain", "60.0 ms", 0.35));
-    parts.push(label(476, 107, "MIDI"));
-    parts.push(
-        `<rect x="476" y="112" width="58" height="15" fill="#3b3b3b"/>` +
-            `<text x="481" y="123" font-size="9.5" fill="#ddd">A</text>` +
-            `<path d="M525 118 l3 4 l3 -4 Z" fill="#aaa"/>`,
-    );
-    return parts.join("\n");
+// Live's own controls in the right column (mocked): Pitch Lock (live.text) and the three dials.
+function liveControls() {
+    const x = UI_X + B.UI_RECT[2] + 4;
+    const w = DEVICE_W - x - 4;
+    return [
+        `<rect x="${x}" y="6" width="${w}" height="15" rx="2" fill="#3b3b3b"/>`,
+        `<text x="${x + w / 2}" y="16.5" font-size="9" text-anchor="middle" fill="#ccc">Pitch Lock</text>`,
+        dial(x - 2, 24, "Smooth", "4.00 ms", 0.08),
+        dial(x - 2, 71, "Depth", "100 %", 1),
+        dial(x - 2, 118, "Dry/Wet", "100 %", 1),
+    ].join("\n");
 }
 
 // setup(ctx), if given, runs on the editor just before it paints (other states for a look).
@@ -183,16 +169,16 @@ function render(setup) {
     }
     mg.calls.length = 0;
     ctx.paint();
-    const ui = callsToSvg(mg.calls, 4, 4);
+    const ui = callsToSvg(mg.calls, UI_X, UI_Y);
     return [
         `<svg xmlns="http://www.w3.org/2000/svg" width="${DEVICE_W * 2}" height="${(DEVICE_H + 18) * 2}" ` +
-            `viewBox="0 -18 ${DEVICE_W} ${DEVICE_H + 18}" font-family="Arial, Helvetica, sans-serif">`,
+            `viewBox="0 -18 ${DEVICE_W} ${DEVICE_H + 18}" font-family="'Ableton Sans', Arial, Helvetica, sans-serif">`,
         `<rect x="0" y="-18" width="${DEVICE_W}" height="18" fill="#4a4a4a"/>`,
         `<circle cx="9" cy="-9" r="4" fill="#f2b84b"/>`,
         `<text x="18" y="-5.5" font-size="10" font-weight="bold" fill="#e8e8e8">Gross Warp</text>`,
         `<rect x="0" y="0" width="${DEVICE_W}" height="${DEVICE_H}" fill="#2f2f2f"/>`,
         ui,
-        liveControls(2),
+        liveControls(),
         "</svg>",
     ].join("\n");
 }
