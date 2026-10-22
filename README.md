@@ -4,7 +4,7 @@ Max for Live devices for Ableton Live.
 
 | Device | What it does | Download |
 |---|---|---|
-| [**Gross Warp**](gross-warp/) | Gross Beat-style time and volume envelopes locked to the song: half time, tape stops, stutters, rolls, scratches, reverses and gates. Eight patterns, 1 beat to 4 bars, any meter, pitch lock, and a companion MIDI device to play patterns from notes. | [GrossWarp.zip](https://github.com/Skizos/ableton-plugs/raw/main/gross-warp/dist/GrossWarp.zip) |
+| [**Gross Warp**](gross-warp/) | Gross Beat-style time and volume envelopes locked to the song: half time, tape stops, stutters, rolls, scratches, reverses and gates. Eight patterns, 1 beat to 4 bars, any meter, Hold, Swing, Dice/Evolve, 76 presets + combos, pitch lock, and a companion MIDI device to play patterns from notes. | [GrossWarp.zip](https://github.com/Skizos/ableton-plugs/raw/main/gross-warp/dist/GrossWarp.zip) |
 
 ![Gross Warp](gross-warp/docs/preview.svg)
 

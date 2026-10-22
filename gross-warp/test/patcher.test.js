@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const B = require("../tools/build");
 const { MaxSim } = require("../tools/maxsim");
 const { parse } = require("../tools/gensim");
-const { ROOT, GEN_SRC, loadUi, makeRig } = require("./helpers");
+const { ROOT, GEN_SRC, UI_SRC, plain, loadUi, makeRig } = require("./helpers");
 
 const files = B.build();
 const amxd = files[path.join(B.FOLDER, B.DEVICE_NAME)];
@@ -26,6 +26,10 @@ const genBox = top.boxes.map((b) => b.box).find((b) => b.text === "gen~");
 const uiBox = top.boxes.map((b) => b.box).find((b) => b.maxclass === "jsui");
 const gen = parse(GEN_SRC);
 const genParams = new Set(gen.decls.filter((d) => d.kind === "Param").map((d) => d.name));
+const routeBox = top.boxes.map((b) => b.box).find((b) => (b.text || "").startsWith("route "));
+const routed = routeBox.text.split(" ").slice(1);
+// Every name the editor sends out of its outlet (sendParam / sendOut in gw_ui.js).
+const uiSends = [...new Set([...UI_SRC.matchAll(/send(?:Param|Out)\("(\w+)"/g)].map((m) => m[1]))];
 
 function linesFrom(patcher, id) {
     return patcher.lines.map((l) => l.patchline).filter((l) => l.source[0] === id);
@@ -121,6 +125,12 @@ test("every message into gen~ names one of its Params or Buffers, and every Para
             sent.add(name);
         }
     }
+    // what the editor sends that [route] does not take goes straight to gen~ (its last outlet)
+    assert.ok(linesFrom(top, routeBox.id).some((l) => l.source[1] === routed.length && l.destination[0] === genBox.id));
+    for (const name of uiSends.filter((n) => !routed.includes(n))) {
+        assert.ok(genParams.has(name), `the editor sends ${name}, which gen~ does not have`);
+        sent.add(name);
+    }
     // the triggers come from the MIDI device, through the link switch
     for (const b of midiTop.boxes.map((x) => x.box).filter((x) => (x.text || "").startsWith("prepend "))) {
         const name = b.text.split(" ")[1];
@@ -137,6 +147,10 @@ test("every message into the editor is a function of the script", () => {
     assert.equal(uiBox.filename, B.UI_SCRIPT);
     for (const l of linesTo(top, uiBox.id)) {
         const src = boxById.get(l.source[0]);
+        if (src.text === "live.colors") {
+            assert.equal(typeof ctx.anything, "function", "theme colors arrive as '<color> r g b a'");
+            continue;
+        }
         assert.ok(src.text.startsWith("prepend "), src.text);
         const name = src.text.split(" ")[1];
         assert.equal(typeof ctx[name], "function", `gw_ui.js has no ${name}()`);
@@ -311,14 +325,29 @@ test("parameters are unique, listed and banked in both devices", () => {
     const blob = uiBox.saved_attribute_attributes.valueof;
     assert.equal(blob.parameter_type, 3, "the editor's data is a blob");
     assert.equal(blob.parameter_invisible, 1, "stored with the set, not automatable");
-    assert.deepEqual(param(top, "Length").saved_attribute_attributes.valueof.parameter_enum.length, 5);
-    assert.deepEqual(param(top, "Switch").saved_attribute_attributes.valueof.parameter_enum, [
-        "Instant",
-        "1/16",
-        "Beat",
-        "Bar",
-        "Pattern",
+    // the menus the editor draws list the same items as their parameters
+    const { ctx } = loadUi();
+    const items = (name) => param(top, name).saved_attribute_attributes.valueof.parameter_enum;
+    assert.deepEqual(items("Switch"), plain(ctx.SWITCH_NAMES));
+    assert.deepEqual(items("Length"), plain(ctx.LENGTH_NAMES));
+    assert.deepEqual(items("Hold Length"), plain(ctx.HOLD_NAMES));
+    assert.deepEqual(items("Hold Mode"), plain(ctx.HOLD_MODES));
+    assert.deepEqual(items("MIDI Link"), plain(ctx.LINK_NAMES));
+    assert.deepEqual(items("Pattern"), ["1", "2", "3", "4", "5", "6", "7", "8"]);
+    const swing = param(top, "Swing").saved_attribute_attributes.valueof;
+    assert.deepEqual([swing.parameter_type, swing.parameter_mmax], [1, 75], "whole percent, 0-75 as gen~ clamps");
+    assert.deepEqual(param(midiTop, "Mode").saved_attribute_attributes.valueof.parameter_enum, [
+        "Hold",
+        "Latch",
+        "One-shot",
     ]);
+    const banks = top.parameters.parameterbanks;
+    assert.deepEqual(Object.keys(banks), ["0", "1"]);
+    const banked = [...banks[0].parameters, ...banks[1].parameters].filter((n) => n !== "-");
+    for (const b of top.boxes.map((x) => x.box).filter((x) => x.parameter_enable === 1 && x.maxclass !== "jsui")) {
+        const name = b.saved_attribute_attributes.valueof.parameter_longname;
+        assert.ok(banked.includes(name) || name === "MIDI Link", `${name} is in a bank (for Push)`);
+    }
 });
 
 test("the presentations fit their devices and nothing overlaps", () => {
@@ -408,4 +437,92 @@ test("at load the buffers' device-unique names reach gen~ and the editor", () =>
     const toUi = sim.got(uiBox.id).map(([, m]) => m.join(" "));
     assert.ok(toGen.includes("gwenv ---gwenv") && toGen.includes("gwpeaks ---gwpeaks"), toGen.join(" | "));
     assert.ok(toUi.includes("envbuf ---gwenv") && toUi.includes("peakbuf ---gwpeaks"), toUi.join(" | "));
+});
+
+test("the panel sets the hidden parameters, which reach gen~ and come back to the panel", () => {
+    const sim = new MaxSim(device.patcher);
+    assert.ok(linesFrom(top, uiBox.id).some((l) => l.destination[0] === routeBox.id), "editor -> [route]");
+    const { ctx } = loadUi();
+    for (const name of routed) {
+        assert.equal(typeof ctx[name], "function", `the panel mirrors ${name}`);
+    }
+    for (const name of uiSends) {
+        assert.ok(routed.includes(name) || genParams.has(name), `${name} goes somewhere`);
+    }
+    const expected = {
+        pattern: "Pattern",
+        quant: "Switch",
+        patlen: "Length",
+        hold: "Hold",
+        holdlen: "Hold Length",
+        holdmode: "Hold Mode",
+        swing: "Swing",
+        grainms: "Grain",
+        midilink: "MIDI Link",
+    };
+    assert.deepEqual(routed.slice().sort(), Object.keys(expected).sort());
+    for (const [msg, longname] of Object.entries(expected)) {
+        const id = sim.byVarname(longname);
+        assert.equal(param(top, longname).presentation, undefined, `${longname} is drawn by the panel, not shown`);
+        sim.emit(uiBox.id, 0, [msg, 2]);
+        assert.deepEqual(sim.got(id).slice(-1), [[0, [2]]], `${msg} 2 sets ${longname}`);
+        sim.emit(id, 0, [2]);
+        assert.deepEqual(sim.got(uiBox.id).slice(-1), [[0, [msg, 2]]], `${longname} answers the panel`);
+        const toGen = sim.got(genBox.id).map(([, m]) => m.join(" "));
+        if (msg === "midilink") {
+            assert.equal(toGen[toGen.length - 1], "midien 1", "MIDI link drives the link switch instead");
+        } else {
+            assert.equal(toGen[toGen.length - 1], `${msg} 2`);
+        }
+    }
+    sim.emit(uiBox.id, 0, ["swunit", 0.125]);
+    assert.deepEqual(sim.got(genBox.id).slice(-1), [[0, ["swunit", 0.125]]], "the rest goes to gen~");
+});
+
+test("the right column: Pitch Lock is a toggle, the dials show and set Smooth, Depth and Dry/Wet", () => {
+    const sim = new MaxSim(device.patcher);
+    const pitch = param(top, "Pitch Lock");
+    assert.equal(pitch.maxclass, "live.text");
+    assert.equal(pitch.mode, undefined, "live.text toggles by default (as Ableton's CPU Reporter uses it)");
+    for (const [longname, msg] of [
+        ["Pitch Lock", "pitchlock"],
+        ["Smooth", "smoothms"],
+        ["Depth", "depth"],
+        ["Dry/Wet", "wet"],
+    ]) {
+        const b = param(top, longname);
+        assert.equal(b.presentation, 1, longname);
+        const [px, , pw] = uiBox.presentation_rect;
+        assert.ok(b.presentation_rect[0] >= px + pw, `${longname} is right of the panel`);
+        sim.emit(b.id, 0, [1]);
+        assert.deepEqual(sim.got(genBox.id).slice(-1), [[0, [msg, 1]]]);
+    }
+});
+
+test("the panel follows Live's theme and the device's on/off switch", () => {
+    const sim = new MaxSim(device.patcher);
+    const colors = sim.byText("live.colors");
+    sim.emit(sim.byText("loadbang"), 0, ["bang"]);
+    assert.deepEqual(sim.got(colors), [[0, ["everything"]]], "all colors at load");
+    sim.emit(colors, 1, ["bang"]); // the theme changed
+    assert.deepEqual(sim.got(colors).slice(-1), [[0, ["everything"]]], "and again on a theme change");
+    sim.emit(colors, 0, ["lcd_bg", 0.1, 0.2, 0.3, 1]);
+    assert.deepEqual(sim.got(uiBox.id).slice(-1), [[0, ["lcd_bg", 0.1, 0.2, 0.3, 1]]]);
+    sim.emit(sim.byText("live.thisdevice"), 1, [0]);
+    assert.deepEqual(sim.got(uiBox.id).slice(-1), [[0, ["enabled", 0]]]);
+});
+
+test("Gross Warp MIDI's One-shot mode reaches gen~ in the trigger code", () => {
+    const sim = new MaxSim(midiDevice.patcher);
+    sim.emit(sim.byText("loadbang"), 0, ["bang"]);
+    sim.emit(sim.byVarname("Link"), 0, [1]); // B
+    sim.emit(sim.byVarname("Mode"), 0, [2]); // One-shot
+    sim.emit(sim.byVarname("Base Note"), 0, [36]);
+    sim.emit(sim.byText("midiparse"), 0, [37, 100]); // pattern 2
+    assert.deepEqual(sim.sent.get(B.LINK_SEND("B")), [["trigon", 1 + 0 + 32]]);
+    const rig = makeRig({ sr: 12000, exposeLocals: true });
+    rig.gen.setParam("midien", 1);
+    rig.gen.setParam("trigon", 1 + 32);
+    rig.run(10, () => [0, 0]);
+    assert.equal(rig.gen.state.trigMode, 2, "gen~ reads mode 2 (one-shot)");
 });

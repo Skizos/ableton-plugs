@@ -174,6 +174,18 @@ class MaxSim {
                 }
                 return;
             }
+            case "route": {
+                // the first word picks the outlet and is stripped; anything else leaves by the last outlet as is
+                const i = args.indexOf(String(msg[0]));
+                if (inlet === 0) {
+                    if (i >= 0) {
+                        out(i, msg.length > 1 ? msg.slice(1) : ["bang"]);
+                    } else {
+                        out(args.length, msg);
+                    }
+                }
+                return;
+            }
             case "prepend":
                 out(0, [args.join(" ")].concat(msg[0] === "symbol" ? msg.slice(1) : msg));
                 return;

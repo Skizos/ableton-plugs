@@ -31,9 +31,14 @@ const INSTALL = "INSTALL.txt";
 const ZIP_NAME = "GrossWarp.zip";
 const ENV_FRAMES = 8 * 2 * (1 + 3 * 128); // must match gw_ui.js and gross_warp.genexpr
 const PEAK_FRAMES = 2 * 256;
-const DEVICE_WIDTH = 540;
+const DEVICE_WIDTH = 442;
+const UI_RECT = [4.0, 6.0, 380.0, 157.0]; // the editor panel: display + two rows of controls (gw_ui.js layout)
 const MIDI_DEVICE_WIDTH = 200;
 const LINKS = ["A", "B", "C", "D"];
+// Enum items of the parameters the editor panel draws; the same lists as in gw_ui.js (a test compares them).
+const SWITCH_NAMES = ["Now", "1/16", "Beat", "Bar", "Pattern"];
+const LENGTH_NAMES = ["1 Beat", "2 Beats", "1 Bar", "2 Bars", "4 Bars"];
+const HOLD_NAMES = ["1/16", "1/8", "1/4", "1/2", "1 Bar"];
 const LINK_SEND = (l) => `grosswarp_${l}`; // global names: they connect devices
 const APPVERSION = { major: 8, minor: 6, revision: 5, architecture: "x64", modernui: 1 };
 
@@ -50,6 +55,7 @@ function io(text) {
         loadbang: [1, ["bang"]],
         "buffer~": [1, ["float", "bang"]],
         "live.thisdevice": [1, ["bang", "int", "int"]],
+        "live.colors": [1, ["", "bang"]],
         "live.path": [1, ["", "", ""]],
         "live.observer": [2, ["", ""]],
         r: [0, [""]],
@@ -80,6 +86,9 @@ function io(text) {
     }
     if (cls === "switch") {
         return [Number(args[0]) + 1, [""]];
+    }
+    if (cls === "route") {
+        return [2, Array(args.length + 1).fill("")];
     }
     throw new Error(`build: no inlet/outlet info for ${cls}`);
 }
@@ -183,28 +192,35 @@ const LIVE_IO = {
     "live.tab": [1, ["", "", "float"]],
     "live.menu": [1, ["", "", "float"]],
     "live.numbox": [1, ["", "float"]],
+    "live.text": [1, ["", ""]],
 };
 
 // Shown in Live's Info View when the pointer is over a control.
 const INFO = {
-    Pattern: "The pattern that plays and that the editor shows. Automate it to switch effects during the song.",
-    Switch: "When a new pattern takes over: at once, or at the next 1/16, beat, bar or end of the pattern.",
-    Length: "How long one pattern is: 1 beat up to 4 bars, in the song's time signature.",
+    Pattern: "The pattern that plays and that the editor shows (pads 1-8). Automate it to switch effects in the song.",
+    Switch: "When a new pattern takes over: now, or at the next 1/16, beat, bar or end of the pattern.",
+    Length: "How long one pattern is: 1 beat up to 4 bars, in the song's time signature (grid menu).",
+    Hold: "Loops a short slice of the output. Last repeats what just played, Next records what comes and repeats it.",
+    "Hold Length": "How long the slice that Hold loops is: 1/16 up to a bar.",
+    "Hold Mode": "Last: loop what just played. Next: record the next slice, then loop it.",
+    Swing: "Pushes every second grid step of both envelopes later (0-75 %), on the editor's grid.",
     Smooth: "Cross-fade time at steps in the time envelope, and slew of the volume envelope. Raise it if steps click.",
     Depth: "How much of both envelopes is applied. 0 % = no effect.",
     "Dry/Wet": "Mix of the processed and the original sound.",
-    "Pitch Lock": "Lock: time effects (half time, stops, reverses) keep the original pitch, using short grains.",
+    "Pitch Lock": "Lit: time effects (half time, stops, reverses) keep the pitch, using short grains. Off: tape.",
     Grain: "Grain size for Pitch Lock: short for drums, long for pads and vocals.",
     "MIDI Link": "Follow the notes of a Gross Warp MIDI device set to the same link (A-D). Off: ignore MIDI.",
     Link: "Which Gross Warps follow these notes: the ones whose MIDI is set to the same letter.",
-    Mode: "Hold: a pattern plays while its note is held. Latch: a note switches to it, the same note again releases it.",
+    Mode: "Hold: plays while the note is held. Latch: a note switches, the same note releases. One-shot: plays once.",
     "Base Note": "The note for pattern 1; the next seven notes play patterns 2 to 8.",
     Thru: "Pass the MIDI on to the next device on this track.",
 };
 
+// prect null: a hidden parameter (the editor panel draws it and sets it); still automatable and saved with the set.
 function liveParam(maxclass, longname, shortname, valueof, rect, prect, extra) {
     const [inlets, outlets] = LIVE_IO[maxclass];
     const info = INFO[longname] ? { annotation: INFO[longname], annotation_name: longname } : {};
+    const shown = prect ? { presentation: 1, presentation_rect: prect } : {};
     return Object.assign(
         info,
         {
@@ -214,8 +230,9 @@ function liveParam(maxclass, longname, shortname, valueof, rect, prect, extra) {
             outlettype: outlets,
             parameter_enable: 1,
             patching_rect: rect,
-            presentation: 1,
-            presentation_rect: prect,
+        },
+        shown,
+        {
             saved_attribute_attributes: {
                 valueof: Object.assign(
                     { parameter_longname: longname, parameter_modmode: 0, parameter_shortname: shortname },
@@ -282,11 +299,13 @@ function project(type) {
     };
 }
 
+// banks: [{ name, parameters: 8 long names or "-" }] for Push and Live's controller banks.
 function topPatcher(p, width, description, banks, type) {
-    const params = Object.assign({}, p.params, {
-        parameterbanks: { 0: { index: 0, name: banks.name, parameters: banks.parameters } },
-        inherited_shortname: 1,
+    const parameterbanks = {};
+    banks.forEach((b, i) => {
+        parameterbanks[i] = { index: i, name: b.name, parameters: b.parameters };
     });
+    const params = Object.assign({}, p.params, { parameterbanks, inherited_shortname: 1 });
     return {
         patcher: {
             fileversion: 1,
@@ -363,17 +382,18 @@ function buildPatcher(genCode) {
     connect(gen, 0, plugout, 0);
     connect(gen, 1, plugout, 1);
 
-    // ---- the editor ----
+    // ---- the editor panel (display and the two rows of controls under it) ----
     const ui = p.add({
         border: 0,
         filename: UI_SCRIPT,
         maxclass: "jsui",
         numinlets: 1,
-        numoutlets: 0,
+        numoutlets: 1,
+        outlettype: [""],
         parameter_enable: 1,
-        patching_rect: [330.0, 470.0, 404.0, 140.0],
+        patching_rect: [330.0, 470.0, UI_RECT[2], UI_RECT[3]],
         presentation: 1,
-        presentation_rect: [4.0, 4.0, 404.0, 140.0],
+        presentation_rect: UI_RECT,
         saved_attribute_attributes: {
             valueof: {
                 parameter_invisible: 1,
@@ -469,198 +489,194 @@ function buildPatcher(genCode) {
     connect(linkSwitch, 0, gen, 0);
 
     // ---- parameters ----
-    const P = (box) => p.add(box);
+    // The right column shows Pitch Lock and three dials. The other parameters are hidden objects that the editor panel
+    // draws: it sends "<name> <value>" out of its outlet, [route] hands the value to the parameter (so Live records
+    // automation and undo), and the parameter's output goes to gen~ and back to the panel. Whatever else the panel
+    // sends (swunit: its grid step, for swing) goes straight to gen~. `msg` is the name on all three sides.
+    const hidden = (i) => [600.0 + (i % 6) * 70, 720.0 + Math.floor(i / 6) * 30, 60.0, 15.0];
+    const column = (y, h) => [UI_RECT[0] + UI_RECT[2] + 4, y, DEVICE_WIDTH - UI_RECT[0] - UI_RECT[2] - 8, h];
+    const dialSpec = (initial, mmin, mmax, unitstyle, exponent) =>
+        Object.assign(
+            { parameter_initial: [initial], parameter_initial_enable: 1, parameter_mmax: mmax, parameter_type: 0 },
+            mmin ? { parameter_mmin: mmin } : {},
+            exponent ? { parameter_exponent: exponent } : {},
+            { parameter_unitstyle: unitstyle },
+        );
     const controls = [
         {
-            id: P(
-                liveParam(
-                    "live.tab",
-                    "Pattern",
-                    "Pattern",
-                    enumParam(["1", "2", "3", "4", "5", "6", "7", "8"], 0),
-                    [600.0, 520.0, 176.0, 16.0],
-                    [4.0, 150.0, 176.0, 16.0],
-                    tabExtra(),
-                ),
+            box: liveParam(
+                "live.tab",
+                "Pattern",
+                "Pattern",
+                enumParam(["1", "2", "3", "4", "5", "6", "7", "8"], 0),
+                hidden(0),
+                null,
+                tabExtra(),
             ),
-            to: ["pattern"],
-            ui: true,
+            msg: "pattern",
         },
         {
-            id: P(
-                liveParam(
-                    "live.menu",
-                    "Switch",
-                    "Switch",
-                    enumParam(["Instant", "1/16", "Beat", "Bar", "Pattern"], 4),
-                    [800.0, 520.0, 66.0, 15.0],
-                    [226.0, 150.0, 66.0, 15.0],
-                ),
-            ),
-            to: ["quant"],
+            box: liveParam("live.menu", "Switch", "Switch", enumParam(SWITCH_NAMES, 4), hidden(1), null),
+            msg: "quant",
         },
         {
-            id: P(
-                liveParam(
-                    "live.menu",
-                    "Length",
-                    "Length",
-                    enumParam(["1 Beat", "2 Beats", "1 Bar", "2 Bars", "4 Bars"], 2),
-                    [880.0, 520.0, 66.0, 15.0],
-                    [340.0, 150.0, 66.0, 15.0],
-                ),
-            ),
-            to: ["patlen"],
-            ui: true,
+            box: liveParam("live.menu", "Length", "Length", enumParam(LENGTH_NAMES, 2), hidden(2), null),
+            msg: "patlen",
         },
         {
-            id: P(
-                liveParam(
-                    "live.dial",
-                    "Smooth",
-                    "Smooth",
-                    {
-                        parameter_exponent: 3.0,
-                        parameter_initial: [4.0],
-                        parameter_initial_enable: 1,
-                        parameter_mmax: 50.0,
-                        parameter_mmin: 0.1,
-                        parameter_type: 0,
-                        parameter_unitstyle: 2,
-                    },
-                    [600.0, 570.0, 54.0, 46.0],
-                    [414.0, 4.0, 54.0, 46.0],
-                ),
-            ),
-            to: ["smoothms"],
+            box: liveParam("live.tab", "Hold", "Hold", enumParam(["Off", "On"], 0), hidden(3), null, tabExtra()),
+            msg: "hold",
         },
         {
-            id: P(
-                liveParam(
-                    "live.dial",
-                    "Depth",
-                    "Depth",
-                    {
-                        parameter_initial: [100.0],
-                        parameter_initial_enable: 1,
-                        parameter_mmax: 100.0,
-                        parameter_type: 0,
-                        parameter_unitstyle: 5,
-                    },
-                    [670.0, 570.0, 54.0, 46.0],
-                    [414.0, 58.0, 54.0, 46.0],
-                ),
-            ),
-            to: ["depth"],
+            box: liveParam("live.menu", "Hold Length", "Hold Len", enumParam(HOLD_NAMES, 2), hidden(4), null),
+            msg: "holdlen",
         },
         {
-            id: P(
-                liveParam(
-                    "live.dial",
-                    "Dry/Wet",
-                    "Dry/Wet",
-                    {
-                        parameter_initial: [100.0],
-                        parameter_initial_enable: 1,
-                        parameter_mmax: 100.0,
-                        parameter_type: 0,
-                        parameter_unitstyle: 5,
-                    },
-                    [740.0, 570.0, 54.0, 46.0],
-                    [414.0, 112.0, 54.0, 46.0],
-                ),
+            box: liveParam(
+                "live.tab",
+                "Hold Mode",
+                "Hold Mode",
+                enumParam(["Last", "Next"], 0),
+                hidden(5),
+                null,
+                tabExtra(),
             ),
-            to: ["wet"],
+            msg: "holdmode",
         },
         {
-            id: P(
-                liveParam(
-                    "live.tab",
-                    "Pitch Lock",
-                    "Pitch",
-                    enumParam(["Off", "Lock"], 0),
-                    [810.0, 570.0, 58.0, 15.0],
-                    [476.0, 18.0, 58.0, 15.0],
-                    tabExtra(),
-                ),
+            box: liveParam(
+                "live.numbox",
+                "Swing",
+                "Swing",
+                {
+                    parameter_initial: [0],
+                    parameter_initial_enable: 1,
+                    parameter_mmax: 75.0,
+                    parameter_type: 1,
+                    parameter_unitstyle: 5,
+                },
+                hidden(6),
+                null,
             ),
-            to: ["pitchlock"],
+            msg: "swing",
         },
         {
-            id: P(
-                liveParam(
-                    "live.dial",
-                    "Grain",
-                    "Grain",
-                    {
-                        parameter_exponent: 2.0,
-                        parameter_initial: [60.0],
-                        parameter_initial_enable: 1,
-                        parameter_mmax: 250.0,
-                        parameter_mmin: 10.0,
-                        parameter_type: 0,
-                        parameter_unitstyle: 2,
-                    },
-                    [880.0, 570.0, 54.0, 46.0],
-                    [478.0, 40.0, 54.0, 46.0],
-                ),
-            ),
-            to: ["grainms"],
+            box: liveParam("live.dial", "Grain", "Grain", dialSpec(60.0, 10.0, 250.0, 2, 2.0), hidden(7), null),
+            msg: "grainms",
         },
         {
-            id: P(
-                liveParam(
-                    "live.menu",
-                    "MIDI Link",
-                    "MIDI",
-                    enumParam(["Off"].concat(LINKS), 0),
-                    [950.0, 570.0, 58.0, 15.0],
-                    [476.0, 112.0, 58.0, 15.0],
-                ),
+            box: liveParam("live.menu", "MIDI Link", "MIDI", enumParam(["Off"].concat(LINKS), 0), hidden(8), null),
+            msg: "midilink",
+            toGen: false,
+        },
+        {
+            box: liveParam(
+                "live.text",
+                "Pitch Lock",
+                "Pitch",
+                enumParam(["Off", "Lock"], 0),
+                [960.0, 470.0, 50.0, 15.0],
+                column(6.0, 15.0),
+                { text: "Pitch Lock", texton: "Pitch Lock" },
             ),
-            to: [],
-            midi: true,
+            msg: "pitchlock",
+            fromUi: false,
+        },
+        {
+            box: liveParam(
+                "live.dial",
+                "Smooth",
+                "Smooth",
+                dialSpec(4.0, 0.1, 50.0, 2, 3.0),
+                [960.0, 500.0, 50.0, 46.0],
+                column(24.0, 46.0),
+            ),
+            msg: "smoothms",
+            fromUi: false,
+        },
+        {
+            box: liveParam(
+                "live.dial",
+                "Depth",
+                "Depth",
+                dialSpec(100.0, 0, 100.0, 5),
+                [1020.0, 500.0, 50.0, 46.0],
+                column(71.0, 46.0),
+            ),
+            msg: "depth",
+            fromUi: false,
+        },
+        {
+            box: liveParam(
+                "live.dial",
+                "Dry/Wet",
+                "Dry/Wet",
+                dialSpec(100.0, 0, 100.0, 5),
+                [1080.0, 500.0, 50.0, 46.0],
+                column(118.0, 46.0),
+            ),
+            msg: "wet",
+            fromUi: false,
         },
     ];
+    const fromUi = controls.filter((c) => c.fromUi !== false);
+    const route = newobj(`route ${fromUi.map((c) => c.msg).join(" ")}`, 330, 640, 400);
+    connect(ui, 0, route, 0);
+    connect(route, fromUi.length, gen, 0);
 
     let px = 600;
     for (const c of controls) {
-        connect(trig, 0, c.id, 0); // push the value out at load
-        for (const target of c.to) {
-            const pre = newobj(`prepend ${target}`, px, 640, 100);
-            px += 110;
-            connect(c.id, 0, pre, 0);
-            connect(pre, 0, gen, 0);
-            if (c.ui) {
-                connect(pre, 0, ui, 0);
-            }
+        const id = p.add(c.box);
+        connect(trig, 0, id, 0); // push the value out at load
+        const routeOut = fromUi.indexOf(c);
+        if (routeOut >= 0) {
+            connect(route, routeOut, id, 0);
         }
-        if (c.midi) {
-            // 0 = off; 1-4 open the switch's inlet for that link; any change also clears a held MIDI pattern
-            const fan = newobj("t i i", px, 640, 40);
-            const on = newobj("> 0", px, 670, 30);
-            const pre = newobj("prepend midien", px, 700, 100);
-            connect(c.id, 0, fan, 0);
-            connect(fan, 1, on, 0);
-            connect(on, 0, pre, 0);
+        const pre = newobj(`prepend ${c.msg}`, px, 800, 100);
+        px += 110;
+        connect(id, 0, pre, 0);
+        if (c.toGen !== false) {
             connect(pre, 0, gen, 0);
+        }
+        if (routeOut >= 0) {
+            connect(pre, 0, ui, 0);
+        }
+        if (c.msg === "midilink") {
+            // 0 = off; 1-4 open the switch's inlet for that link; any change also clears a held MIDI pattern
+            const fan = newobj("t i i", px, 800, 40);
+            const on = newobj("> 0", px, 830, 30);
+            const en = newobj("prepend midien", px, 860, 100);
+            px += 110;
+            connect(id, 0, fan, 0);
+            connect(fan, 1, on, 0);
+            connect(on, 0, en, 0);
+            connect(en, 0, gen, 0);
             connect(fan, 0, linkSwitch, 0);
         }
     }
 
-    p.add(liveComment("Switch", [186.0, 150.0, 40.0, 16.0], [700, 760]));
-    p.add(liveComment("Length", [298.0, 150.0, 40.0, 16.0], [760, 760]));
-    p.add(liveComment("Pitch", [476.0, 2.0, 58.0, 15.0], [820, 760]));
-    p.add(liveComment("MIDI", [476.0, 96.0, 58.0, 15.0], [880, 760]));
+    // ---- the panel follows Live's theme (all colors at load, again when the theme changes) and the device on/off ----
+    const everything = message("everything", 330, 680, 70);
+    const colors = newobj("live.colors", 330, 710, 80);
+    connect(trig, 0, everything, 0);
+    connect(colors, 1, everything, 0);
+    connect(everything, 0, colors, 0);
+    connect(colors, 0, ui, 0);
+    const enabled = newobj("prepend enabled", 980, 60, 100);
+    connect(thisDevice, 1, enabled, 0);
+    connect(enabled, 0, ui, 0);
 
     return topPatcher(
         p,
         DEVICE_WIDTH,
         "Gross Beat-style time and volume envelopes, eight patterns, locked to Live's transport.",
-        {
-            name: "Gross Warp",
-            parameters: ["Pattern", "Smooth", "Depth", "Dry/Wet", "Switch", "Length", "Pitch Lock", "Grain"],
-        },
+        [
+            {
+                name: "Gross Warp",
+                parameters: ["Pattern", "Switch", "Hold", "Hold Length", "Swing", "Smooth", "Depth", "Dry/Wet"],
+            },
+            { name: "Settings", parameters: ["Length", "Hold Mode", "Pitch Lock", "Grain", "-", "-", "-", "-"] },
+        ],
         "aaaa",
     );
 }
@@ -734,7 +750,14 @@ function buildMidiPatcher() {
     connect(lb, 0, push, 0);
 
     const link = p.add(
-        liveParam("live.menu", "Link", "Link", enumParam(LINKS, 0), [600.0, 100.0, 60.0, 15.0], [50.0, 24.0, 60.0, 15.0]),
+        liveParam(
+            "live.menu",
+            "Link",
+            "Link",
+            enumParam(LINKS, 0),
+            [600.0, 100.0, 60.0, 15.0],
+            [50.0, 24.0, 60.0, 15.0],
+        ),
     );
     const linkPlus = newobj("+ 1", 600, 130, 40);
     connect(link, 0, linkPlus, 0);
@@ -745,9 +768,9 @@ function buildMidiPatcher() {
             "live.tab",
             "Mode",
             "Mode",
-            enumParam(["Hold", "Latch"], 0),
-            [680.0, 100.0, 90.0, 15.0],
-            [50.0, 46.0, 90.0, 15.0],
+            enumParam(["Hold", "Latch", "One-shot"], 0),
+            [680.0, 100.0, 141.0, 15.0],
+            [50.0, 46.0, 141.0, 15.0],
             tabExtra(),
         ),
     );
@@ -799,8 +822,8 @@ function buildMidiPatcher() {
     return topPatcher(
         p,
         MIDI_DEVICE_WIDTH,
-        "Plays Gross Warp patterns from MIDI notes (hold or latch).",
-        { name: "Gross Warp MIDI", parameters: ["Link", "Mode", "Base Note", "Thru", "-", "-", "-", "-"] },
+        "Plays Gross Warp patterns from MIDI notes (hold, latch or one-shot).",
+        [{ name: "Gross Warp MIDI", parameters: ["Link", "Mode", "Base Note", "Thru", "-", "-", "-", "-"] }],
         "mmmm",
     );
 }
@@ -1023,4 +1046,9 @@ module.exports = {
     ZIP_NAME,
     LINKS,
     LINK_SEND,
+    SWITCH_NAMES,
+    LENGTH_NAMES,
+    HOLD_NAMES,
+    DEVICE_WIDTH,
+    UI_RECT,
 };
