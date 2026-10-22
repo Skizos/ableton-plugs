@@ -123,6 +123,10 @@ The first build loaded in Live and Max's console showed two errors, both fixed:
 - "a project without a name is like a day without sunshine. fatal.": the patcher had no `project` section; it now
   carries the same one as Ableton's devices (a test checks it and its `amxdtype`).
 
+The redesigned panel's first load (same day) showed a blank white editor: formatting the script had added trailing
+commas in function calls (ES2017), so Max's JavaScript engine rejected the whole file. Removed (the script parses as
+ES5 and ES3 with acorn), and a lint rule now fails on any trailing comma; it fails on that build.
+
 ## Not verified here
 
 Confirmed by the owner's first load (2026-10-22: "it works"): the devices load, gen~ compiles the codebox and

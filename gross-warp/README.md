@@ -207,6 +207,7 @@ for red lines:
 | Symptom | Likely cause and fix |
 |---|---|
 | "a project without a name is like a day without sunshine. fatal." and "symbol: No such object" | A download from before 2026-10-22: download the zip again (fixed). |
+| Blank white panel, console shows a JavaScript syntax error | A download from 2026-10-22 before this fix: download the zip again. |
 | Grey/empty display, console says it can't find `gw_ui.js` | The script isn't next to the `.amxd`. Keep the folder together, or freeze the device. |
 | A gen~ error, audio silent | The codebox didn't compile: double-click `gen~` in the Max editor, the error is shown under the code — please send it to me. |
 | Editor works but the sound never changes | gen~ didn't pick up the envelope buffer (it is pointed at it by the message `gwenv <name>` at load). Send me the console line. |

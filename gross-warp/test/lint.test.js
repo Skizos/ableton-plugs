@@ -119,6 +119,9 @@ test("gw_ui.js is ES5", () => {
         [/\.(includes|startsWith|endsWith|padStart|padEnd|find|findIndex|repeat)\(/, "ES6 method"],
         [/\b(Object\.assign|Array\.from|Array\.of|Math\.(sign|log2|log10|trunc|cbrt|hypot)|Number\.is\w+)\b/, "ES6 API"],
         [/\b(Symbol|Promise|Map|Set|WeakMap|Proxy|Reflect)\b/, "ES6 global"],
+        // a trailing comma in a call or parameter list is ES2017: Max's engine rejects the whole file and the jsui
+        // stays blank (seen in Live 2026-10-22, from a formatter's default); none in literals either, to be safe
+        [/,\s*[)\]}]/, "trailing comma"],
     ];
     for (const [re, what] of banned) {
         assert.doesNotMatch(code, re, what);

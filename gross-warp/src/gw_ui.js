@@ -39,7 +39,7 @@ var GRIDS = [
     { name: "1/16", div: 16 },
     { name: "1/32", div: 32 },
     { name: "1/8T", div: 12 },
-    { name: "1/16T", div: 24 },
+    { name: "1/16T", div: 24 }
 ];
 var LENGTH_NAMES = ["1 Beat", "2 Beats", "1 Bar", "2 Bars", "4 Bars"];
 var SWITCH_NAMES = ["Now", "1/16", "Beat", "Bar", "Pattern"];
@@ -297,7 +297,7 @@ function evStutter(at, len, size) {
                 out.push([(j + 1) / len, off]);
             }
             return out;
-        },
+        }
     };
 }
 
@@ -309,9 +309,9 @@ function evSlow(at, len, speed, curve) {
         points: function () {
             return [
                 [0, 0, curve || 0],
-                [1, len * (1 - speed)],
+                [1, len * (1 - speed)]
             ];
-        },
+        }
     };
 }
 
@@ -333,9 +333,9 @@ function evReverse(at, len) {
         points: function () {
             return [
                 [0, 0],
-                [1, 2 * len],
+                [1, 2 * len]
             ];
-        },
+        }
     };
 }
 
@@ -347,9 +347,9 @@ function evFast(at, len, speed) {
         points: function () {
             return [
                 [0, len * (speed - 1)],
-                [1, 0],
+                [1, 0]
             ];
-        },
+        }
     };
 }
 
@@ -366,7 +366,7 @@ function evScratch(at, len, times, depth) {
             }
             out.push([1, 0]);
             return out;
-        },
+        }
     };
 }
 
@@ -378,9 +378,9 @@ function evDelay(at, len, cellsLate) {
         points: function () {
             return [
                 [0, cellsLate],
-                [1, cellsLate],
+                [1, cellsLate]
             ];
-        },
+        }
     };
 }
 
@@ -397,7 +397,7 @@ function evChop(at, order) {
                 out.push([(j + 1) / order.length, off]);
             }
             return out;
-        },
+        }
     };
 }
 
@@ -406,7 +406,7 @@ function gate(levels) {
     return fromCells(
         levels.map(function (v) {
             return 1 - v;
-        }),
+        })
     );
 }
 
@@ -458,7 +458,7 @@ var TIME_PRESETS = [
         return fromCells(
             cells(16, function (i) {
                 return i <= 12 ? 0 : (i - 12) / 16;
-            }),
+            })
         );
     }),
     T("Stutter 1/8 End", "Stutter", function () {
@@ -555,7 +555,7 @@ var TIME_PRESETS = [
         return fromCells(
             cells(16, function (i) {
                 return i <= 8 ? 0 : (i - 8) / 16;
-            }),
+            })
         );
     }),
     T("Roll Build", "Build", function () {
@@ -568,7 +568,7 @@ var TIME_PRESETS = [
                     return Math.floor((i - 16) / 2) / 16;
                 }
                 return 0.25 + (i - 24) / 32;
-            }),
+            })
         );
     }),
     T("Build 1/8 > 1/32", "Build", function () {
@@ -609,7 +609,7 @@ var TIME_PRESETS = [
     }),
     T("Echo Last Beat", "Delay", function () {
         return timeLine(16, [evDelay(12, 4, 3)]);
-    }),
+    })
 ];
 
 var VOL_PRESETS = [
@@ -620,28 +620,28 @@ var VOL_PRESETS = [
         return fromCells(
             cells(16, function (i) {
                 return i % 2;
-            }),
+            })
         );
     }),
     T("Gate 1/16", "Gate", function () {
         return fromCells(
             cells(32, function (i) {
                 return i % 2;
-            }),
+            })
         );
     }),
     T("Gate 3/16", "Gate", function () {
         return gate(
             cells(16, function (i) {
                 return i % 3 === 0 ? 1 : 0;
-            }),
+            })
         );
     }),
     T("Gate 1/32 End", "Gate", function () {
         return gate(
             cells(32, function (i) {
                 return i < 24 ? 1 : 1 - (i % 2);
-            }),
+            })
         );
     }),
     T("Pump 1/4", "Pump", function () {
@@ -667,7 +667,7 @@ var VOL_PRESETS = [
         return fromCells(
             cells(16, function (i) {
                 return 1 - TRANCE[i];
-            }),
+            })
         );
     }),
     T("Trance 2", "Trance", function () {
@@ -680,21 +680,21 @@ var VOL_PRESETS = [
         return gate(
             cells(16, function (i) {
                 return i < 12 ? 1 : i % 2 ? 0 : 1;
-            }),
+            })
         );
     }),
     T("Stutter End", "Stutter", function () {
         return gate(
             cells(32, function (i) {
                 return i < 28 ? 1 : i % 2 ? 0 : 1;
-            }),
+            })
         );
     }),
     T("Off-Beat", "Rhythm", function () {
         return fromCells(
             cells(8, function (i) {
                 return i % 2 === 0 ? 1 : 0;
-            }),
+            })
         );
     }),
     T("Euclid 5/16", "Rhythm", function () {
@@ -710,21 +710,21 @@ var VOL_PRESETS = [
         return gate(
             cells(12, function (i) {
                 return i % 2 === 0 ? 1 : 0;
-            }),
+            })
         );
     }),
     T("Triplet Shuffle", "Triplet", function () {
         return gate(
             cells(12, function (i) {
                 return i % 3 === 1 ? 0 : 1;
-            }),
+            })
         );
     }),
     T("Triplet 1/16", "Triplet", function () {
         return gate(
             cells(24, function (i) {
                 return i % 3 === 2 ? 0 : 1;
-            }),
+            })
         );
     }),
     T("Fade In", "Fade", function () {
@@ -743,21 +743,21 @@ var VOL_PRESETS = [
         return fromCells(
             cells(32, function (i) {
                 return i < 24 ? 0 : i % 2;
-            }),
+            })
         );
     }),
     T("Cut Beat 4", "Cut", function () {
         return gate(
             cells(16, function (i) {
                 return i < 12 ? 1 : 0;
-            }),
+            })
         );
     }),
     T("Cut 2 & 4", "Cut", function () {
         return gate(
             cells(16, function (i) {
                 return (i >= 4 && i < 6) || (i >= 12 && i < 14) ? 0 : 1;
-            }),
+            })
         );
     }),
     T("Saw 1/4", "Shape", function () {
@@ -768,7 +768,7 @@ var VOL_PRESETS = [
     }),
     T("Triangle 1/2", "Shape", function () {
         return cleanEnv([pt(0, 1), pt(0.25, 0), pt(0.5, 1), pt(0.75, 0), pt(1, 1)]);
-    }),
+    })
 ];
 
 var PRESETS = [TIME_PRESETS, VOL_PRESETS];
@@ -783,7 +783,7 @@ var COMBOS = [
     { name: "Reverse Swell", time: "Reverse 1/2", vol: "Swell 1/2" },
     { name: "Glitch Chop", time: "Glitch", vol: "Chop Last Beat" },
     { name: "Build Up", time: "Build 1/8 > 1/32", vol: "Fade In" },
-    { name: "Wobble Triplets", time: "Wobble", vol: "Triplet Shuffle" },
+    { name: "Wobble Triplets", time: "Wobble", vol: "Triplet Shuffle" }
 ];
 
 // Pattern slots 1-8 start as useful pairs (time preset, volume preset).
@@ -795,7 +795,7 @@ var DEFAULT_SLOTS = [
     ["Reverse 1/2", "Normal"],
     ["Normal", "Gate 1/16"],
     ["Stutter 1/4", "Trance Gate"],
-    ["Scratch", "Pump 1/4"],
+    ["Scratch", "Pump 1/4"]
 ];
 
 // Names of version 1's preset lists, by index, so its saved preset numbers keep their names.
@@ -814,7 +814,7 @@ var V1_NAMES = [
         "Roll Build",
         "Scratch",
         "Slow > Fast",
-        "Delay 1/8",
+        "Delay 1/8"
     ],
     [
         "Normal",
@@ -826,8 +826,8 @@ var V1_NAMES = [
         "Fade Out",
         "Off-Beat",
         "Chop Last Beat",
-        "Swell 1/2",
-    ],
+        "Swell 1/2"
+    ]
 ];
 
 function presetIndex(env, name) {
@@ -889,7 +889,7 @@ var view = {
     enabled: 1,
     pop: "",
     browseCat: "",
-    hover: "",
+    hover: ""
 };
 var drag = null;
 var undoStack = [];
@@ -933,7 +933,7 @@ function deserialize(a) {
         edit: clamp(Math.floor(a[2]), 0, 1),
         tool: clamp(Math.floor(a[3]), 0, 1),
         grid: clamp(Math.floor(a[4]), 0, GRIDS.length - 1),
-        evolve: v1 ? 0 : clamp(Math.floor(a[5]), 0, EVOLVE_NAMES.length - 1),
+        evolve: v1 ? 0 : clamp(Math.floor(a[5]), 0, EVOLVE_NAMES.length - 1)
     };
     var k = 6;
     for (var p = 0; p < NUM_PAT; p++) {
@@ -1471,8 +1471,8 @@ function diceTime(n) {
                     at,
                     cells(len, function () {
                         return Math.min(at, pick([len, len, 2 * len]));
-                    }),
-                ),
+                    })
+                )
             );
         }
     }
@@ -1491,7 +1491,7 @@ function diceVolume(n) {
         return gate(
             cells(n, function (i) {
                 return i % 4 === 0 || rand() > 0.35 ? 1 : 0;
-            }),
+            })
         );
     }
     if (kind === "pump") {
@@ -1501,13 +1501,13 @@ function diceVolume(n) {
         return gate(
             cells(n, function (i) {
                 return i < n - pick([4, 8]) ? 1 : 1 - (i % 2);
-            }),
+            })
         );
     }
     return gate(
         cells(n, function (i) {
             return i >= (3 * n) / 4 && i < (3 * n) / 4 + n / 8 ? 0 : 1;
-        }),
+        })
     );
 }
 
@@ -1816,7 +1816,7 @@ function browserItems(L) {
             x: 4 + Math.floor(i / catRows) * (catW + 2),
             y: 5 + (i % catRows) * rowH,
             w: catW,
-            h: rowH - 1,
+            h: rowH - 1
         });
     }
     var list = [];
@@ -1858,7 +1858,7 @@ function switchItems(L) {
             x: b.x,
             y: ROW2_Y - 4 - (SWITCH_NAMES.length - i) * 12,
             w: b.w,
-            h: 11,
+            h: 11
         });
     }
     return items;
@@ -1901,7 +1901,7 @@ function gridItems(L) {
     }
     return rowsPop(L, "grid", [
         { kind: "snap", label: "Snap", names: names, current: S.grid },
-        { kind: "length", label: "Length", names: LENGTH_NAMES, current: view.patlen },
+        { kind: "length", label: "Length", names: LENGTH_NAMES, current: view.patlen }
     ]);
 }
 
@@ -1910,7 +1910,7 @@ function settingsItems(L) {
         { kind: "holdmode", label: "Hold", names: HOLD_MODES, current: view.holdmode },
         { kind: "grain", label: "Grain", names: ["-", view.grain + " ms", "+"], current: -1 },
         { kind: "midilink", label: "MIDI", names: LINK_NAMES, current: view.midilink },
-        { kind: "evolve", label: "Evolve", names: EVOLVE_NAMES, current: S.evolve },
+        { kind: "evolve", label: "Evolve", names: EVOLVE_NAMES, current: S.evolve }
     ]);
 }
 
@@ -2344,7 +2344,7 @@ var FALLBACK = {
     control_fg: [0.85, 0.85, 0.85, 1],
     lcd_control_fg_zombie: [0.48, 0.48, 0.48, 1],
     control_selection: [0.45, 0.78, 1.0, 1],
-    display_handle_two: [1.0, 0.65, 0.22, 1],
+    display_handle_two: [1.0, 0.65, 0.22, 1]
 };
 
 function themeColor(id) {
@@ -2375,7 +2375,7 @@ function palette() {
         dim: themeColor("lcd_control_fg_zombie"),
         accent: themeColor("control_selection"),
         pad: themeColor("control_selection"),
-        env: [themeColor("control_selection"), themeColor("display_handle_two")],
+        env: [themeColor("control_selection"), themeColor("display_handle_two")]
     };
     pal.ink = [0.07, 0.07, 0.07, 1];
     return pal;

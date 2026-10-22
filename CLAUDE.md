@@ -32,8 +32,10 @@
   like a gen operator or constant (`wave`, `rate`, `delta`, `e`, `pi`, `mix`, `pass`, …). Passing Buffer/Data into
   functions is unverified, so buffer reads are inlined. A Buffer is retargeted by sending gen~
   `<Buffer name> <buffer~ name>` (works: Gross Warp runs in Live, owner's report 2026-10-22).
-- **js / jsui:** ES5 only (Max's engine predates ES6). Touch Max globals only inside functions so tests can load the
-  file. `Function.immediate` is gone since Max 6: js always runs at low priority, so keep timing-critical paths (MIDI
+- **js / jsui:** ES5 only (Max's engine predates ES6). No trailing commas, above all in calls: a formatter's default
+  (Prettier's `--trailing-comma all`) adds them, Max rejects the whole file and the jsui stays blank white (seen in Live
+  2026-10-22); format with `--trailing-comma none` and parse with acorn at `ecmaVersion: 5` before shipping. Touch Max
+  globals only inside functions so tests can load the file. `Function.immediate` is gone since Max 6: js always runs at low priority, so keep timing-critical paths (MIDI
   triggers, clocks) in native objects.
 - **Names:** `---name` makes buffers/sends private to a device instance — substituted in object boxes, so feed the
   names on with `[t ---x] → [prepend …]`. Use plain global names only to link devices on purpose.
