@@ -160,7 +160,7 @@ test("buffers are device-unique and sized for both sides", () => {
         assert.ok(name.startsWith("---"), `${name} is private to the device`);
         const size = linesTo(top, b.id).map((l) => boxById.get(l.source[0]).text)[0];
         assert.equal(size, `sizeinsamps ${name.endsWith("gwenv") ? B.ENV_FRAMES : B.PEAK_FRAMES}`);
-        assert.ok(top.boxes.some((x) => x.box.text === `symbol ${name}`), `the name ${name} is handed on`);
+        assert.ok(top.boxes.some((x) => x.box.text === `t ${name}`), `the name ${name} is handed on`);
     }
 });
 
@@ -175,7 +175,7 @@ test("the load order sizes the buffers before naming them, then pushes the param
     };
     sim.emit(sim.byText("loadbang"), 0, ["bang"]);
     assert.ok(order.indexOf("t b b b") === 0);
-    const firstSymbol = order.findIndex((t) => t.startsWith("symbol"));
+    const firstSymbol = order.findIndex((t) => t.startsWith("t ---"));
     const lastSize = order.map((t) => t.startsWith("sizeinsamps")).lastIndexOf(true);
     const firstParam = order.findIndex((t) => t.startsWith("live."));
     assert.ok(lastSize < firstSymbol && firstSymbol < firstParam, order.join(" > "));
@@ -350,4 +350,62 @@ test("every control explains itself in Live's Info View", () => {
             assert.equal(b.annotation_name, b.varname);
         }
     }
+});
+
+const MAX_OBJECTS = new Set(require("./max-objects.json").objects);
+
+test("every box is a real Max object (Ableton's list of known objects)", () => {
+    for (const patcher of [top, midiTop]) {
+        for (const { box } of patcher.boxes) {
+            const cls = box.maxclass === "newobj" ? box.text.split(" ")[0] : box.maxclass;
+            assert.ok(MAX_OBJECTS.has(cls), `[${box.text || box.maxclass}]: ${cls} is not a Max object`);
+        }
+    }
+    for (const { box } of genBox.patcher.boxes) {
+        const cls = box.maxclass === "newobj" ? box.text.split(" ")[0] : box.maxclass;
+        assert.ok(["in", "out", "codebox"].includes(cls), `gen~: ${cls}`);
+    }
+});
+
+test("both devices carry the project section Max needs, typed like their container", () => {
+    for (const [patcher, bytes] of [
+        [top, amxd],
+        [midiTop, midiAmxd],
+    ]) {
+        const proj = patcher.project;
+        assert.ok(proj, "a device without a project stops Max: 'a project without a name ... fatal'");
+        assert.equal(proj.amxdtype, bytes.readUInt32BE(8), "amxdtype = the ampf type letters");
+        assert.deepEqual(Object.keys(proj).sort(), [
+            "amxdtype",
+            "autolocalize",
+            "autoorganize",
+            "contents",
+            "creationdate",
+            "detailsvisible",
+            "devpath",
+            "devpathtype",
+            "hideprojectwindow",
+            "includepackages",
+            "layout",
+            "modificationdate",
+            "readonly",
+            "searchpath",
+            "showdependencies",
+            "sortmode",
+            "version",
+            "viewmode",
+            "viewrect",
+        ]);
+    }
+    assert.equal(top.project.amxdtype, 1633771873, "as in Ableton's audio effects");
+    assert.equal(midiTop.project.amxdtype, 1835887981, "as in Ableton's MIDI effects");
+});
+
+test("at load the buffers' device-unique names reach gen~ and the editor", () => {
+    const sim = new MaxSim(device.patcher);
+    sim.emit(sim.byText("loadbang"), 0, ["bang"]);
+    const toGen = sim.got(genBox.id).map(([, m]) => m.join(" "));
+    const toUi = sim.got(uiBox.id).map(([, m]) => m.join(" "));
+    assert.ok(toGen.includes("gwenv ---gwenv") && toGen.includes("gwpeaks ---gwpeaks"), toGen.join(" | "));
+    assert.ok(toUi.includes("envbuf ---gwenv") && toUi.includes("peakbuf ---gwpeaks"), toUi.join(" | "));
 });
